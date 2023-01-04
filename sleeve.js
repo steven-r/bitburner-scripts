@@ -154,19 +154,18 @@ async function mainLoop(ns) {
     // Update all sleeve stats and loop over all sleeves to do some individual checks and task assignments
     let dictSleeveCommand = async (command) => await getNsDataThroughFile(ns, `ns.args.map(i => ns.sleeve.${command}(i))`,
         `/Temp/sleeve-${command}-all.txt`, [...Array(numSleeves).keys()]);
-    let sleeveStats = await dictSleeveCommand('getSleeveStats');
-    let sleeveInfo = await dictSleeveCommand('getInformation');
+    let sleeveData = await dictSleeveCommand('getSleeve');
     let sleeveTasks = await dictSleeveCommand('getTask');
 
     // If not disabled, set the "follow player" sleeve to be the first sleeve with 0 shock
     followPlayerSleeve = options['disable-follow-player'] ? -1 : undefined;
     for (let i = 0; i < numSleeves; i++) // Hack below: Prioritize sleeves doing bladeburner contracts, don't have them follow player
-        if (sleeveStats[i].shock == 0 && (i < i || i > 3 || !playerInfo.inBladeburner || options['disable-bladeburner']))
+        if (sleeveData[i].shock == 0 && (i < i || i > 3 || !playerInfo.inBladeburner || options['disable-bladeburner']))
             followPlayerSleeve ??= i; // Skips assignment if previously assigned
     followPlayerSleeve ??= 0; // If all have shock, use the first sleeve
 
     for (let i = 0; i < numSleeves; i++) {
-        let sleeve = { ...sleeveStats[i], ...sleeveInfo[i], ...sleeveTasks[i] }; // For convenience, merge all sleeve stats/info into one object
+        let sleeve = { ...sleeveData[i], ...sleeveTasks[i] }; // For convenience, merge all sleeve stats/info into one object
         // Manage sleeve augmentations (if available)
         if (sleeve.shock == 0) // No augs are available augs until shock is 0
             budget -= await manageSleeveAugs(ns, i, budget);
@@ -199,7 +198,7 @@ class SleeveTask { constructor() { this.type = ""; this.actionType = ""; this.ac
  * @param {NS} ns 
  * @param {Player} playerInfo
  * @param {{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }} playerWorkInfo
- * @param {SleeveSkills | SleeveInformation | SleeveTask} sleeve
+ * @param {SleevePerson | SleeveTask} sleeve
  * @returns {Promise<[string, string, any[], string]>} a 4-tuple of task name, command, args, and status message */
 async function pickSleeveTask(ns, playerInfo, playerWorkInfo, i, sleeve, canTrain) {
     // Initialize sleeve dicts on first loop
@@ -384,12 +383,12 @@ async function calculateCrimeChance(ns, sleeve, crimeName) {
             crimeName == "mug" ? { difficulty: 0.2, strength_success_weight: 1.5, defense_success_weight: 0.5, dexterity_success_weight: 1.5, agility_success_weight: 0.5, } :
                 undefined));
     let chance =
-        (crimeStats.hacking_success_weight || 0) * sleeve.hacking +
-        (crimeStats.strength_success_weight || 0) * sleeve.strength +
-        (crimeStats.defense_success_weight || 0) * sleeve.defense +
-        (crimeStats.dexterity_success_weight || 0) * sleeve.dexterity +
-        (crimeStats.agility_success_weight || 0) * sleeve.agility +
-        (crimeStats.charisma_success_weight || 0) * sleeve.charisma;
+        (crimeStats.hacking_success_weight || 0) * sleeve.exp.hacking +
+        (crimeStats.strength_success_weight || 0) * sleeve.exp.strength +
+        (crimeStats.defense_success_weight || 0) * sleeve.exp.defense +
+        (crimeStats.dexterity_success_weight || 0) * sleeve.exp.dexterity +
+        (crimeStats.agility_success_weight || 0) * sleeve.exp.agility +
+        (crimeStats.charisma_success_weight || 0) * sleeve.exp.charisma;
     chance /= 975;
     chance /= crimeStats.difficulty;
     return Math.min(chance, 1);
