@@ -1766,7 +1766,7 @@ async function buildServerList(ns, verbose = false, allServers = undefined) {
     let scanResult = allServers.filter((hostName, i) => hostName == "home" || !flaggedForDeletion[i]);
     // Ignore hacknet node servers if we are not supposed to run scripts on them (reduces their hash rate when we do)
     if (!useHacknetNodes)
-        scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-node-'))
+        scanResult = scanResult.filter(hostName => !hostName.startsWith('hacknet-server-'))
     // Remove all servers we currently have added that are no longer being returned by the above query
     for (const hostName of allHostNames.filter(hostName => !scanResult.includes(hostName)))
         removeServerByName(ns, hostName);
