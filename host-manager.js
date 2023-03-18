@@ -43,9 +43,10 @@ export async function main(ns) {
 
     // Get the maximum number of purchased servers in this bitnode
     maxPurchasedServers = await getNsDataThroughFile(ns, 'ns.getPurchasedServerLimit()', '/Temp/getPurchasedServerLimit.txt');
-    log(ns, `INFO: Max purchasable servers has been detected as ${maxPurchasedServers.toFixed(0)}.`);
     if (maxPurchasedServers == 0)
         return log(ns, `INFO: Shutting down due to host purchasing being disabled in this BN...`);
+
+    log(ns, `INFO: Max purchasable servers has been detected as ${maxPurchasedServers.toFixed(0)}.`);
 
     // Get the maximum size of purchased servers in this bitnode
     maxPurchasableServerRamExponent = await getNsDataThroughFile(ns, 'Math.log2(ns.getPurchasedServerMaxRam())', '/Temp/host-max-ram-exponent.txt');
@@ -105,7 +106,7 @@ async function tryToBuyBestServerPossible(ns) {
 
     // If some of the servers are hacknet servers, and they aren't being used for scripts, ignore the RAM they have available
     // with the assumption that these are reserved for generating hashes
-    const likelyHacknet = rootedServers.filter(s => s.startsWith("hacknet-node-"));
+    const likelyHacknet = rootedServers.filter(s => s.startsWith("hacknet-server-"));
     if (likelyHacknet.length > 0) {
         const totalHacknetUsedRam = likelyHacknet.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
         if (totalHacknetUsedRam == 0) {

@@ -965,11 +965,11 @@ async function trySpendHashes(ns, spendOn) {
         '/Temp/hacknet-spendHashes-returnSpent.txt', [spendOn]);
 }
 
-/** If we're wealthy, hashes have relatively little monetary value, spend hacknet-node hashes on contracts to gain rep faster
+/** If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
  * @param {NS} ns */
 export async function tryBuyReputation(ns) {
     if (options['no-coding-contracts']) return;
-    if ((await getPlayerInfo(ns)).money > 100E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-node hashes on contracts to gain rep faster
+    if ((await getPlayerInfo(ns)).money > 100E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
         let spentHashes = await trySpendHashes(ns, "Generate Coding Contract");
         if (spentHashes > 0) {
             log(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, false, 'success');
@@ -1057,7 +1057,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 if (await studyForCharisma(ns, shouldFocus))
                     [isWorking, isStudying] = [false, true];
             }
-            if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-node hashes on university upgrades while we've got a ways to study to make it go faster
+            if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-server hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await trySpendHashes(ns, "Improve Studying");
                 if (spentHashes > 0) {
                     log(ns, 'Bought a "Improve Studying" upgrade.', false, 'success');

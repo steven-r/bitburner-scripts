@@ -138,7 +138,7 @@ export async function main(ns) {
                 const servers = await getAllServersInfo(ns);
                 const rooted = servers.filter(s => s.hasAdminRights).length;
                 const purchased = servers.filter(s => s.hostname != "home" && s.purchasedByPlayer).length; // "home" counts as purchased by the game
-                const likelyHacknet = servers.filter(s => s.hostname.startsWith("hacknet-node-"));
+                const likelyHacknet = servers.filter(s => s.hostname.startsWith("hacknet-server-"));
                 // Add Server count.
                 addHud("Servers", `${servers.length}/${rooted}/${purchased}`, `The number of servers on the network (${servers.length}) / ` +
                     `number rooted (${rooted}) / number purchased ` + (likelyHacknet.length > 0 ?
@@ -150,7 +150,7 @@ export async function main(ns) {
                     `${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
                 // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
                 const includeHacknet = likelyHacknet.some(s => s.ramUsed > 0);
-                const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-node-")))
+                const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-server-")))
                     .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
                 // Add Total Network RAM and Utilization
                 addHud("All RAM", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,

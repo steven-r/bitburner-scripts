@@ -125,8 +125,8 @@ export function upgradeHacknet(ns, maxSpend, maxPayoffTimeSeconds = 3600 /* 3600
     if (shouldBuyNewNode) cost = newNodeCost;
 
     // Prepare info about the next uprade. Whether we end up purchasing or not, we will display this info.
-    let strPurchase = (shouldBuyNewNode ? `a new node "hacknet-node-${ns.hacknet.numNodes()}"` :
-        `hacknet-node-${nodeToUpgrade} ${bestUpgrade.name} ${upgradedValue}`) + ` for ${formatMoney(cost)}`;
+    let strPurchase = (shouldBuyNewNode ? `a new node "hacknet-server-${ns.hacknet.numNodes()}"` :
+        `hacknet-server-${nodeToUpgrade} ${bestUpgrade.name} ${upgradedValue}`) + ` for ${formatMoney(cost)}`;
     let strPayoff = `production ${((shouldBuyNewNode ? newNodePayoff : bestUpgradePayoff) * cost).toPrecision(3)} payoff time: ${formatDuration(1000 * payoffTimeSeconds)}`
     if (cost > maxSpend) {
         setStatus(ns, `The next best purchase would be ${strPurchase}, but the cost exceeds the spending limit (${formatMoney(maxSpend)})`);
