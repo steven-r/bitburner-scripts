@@ -203,9 +203,14 @@ async function tryToBuyBestServerPossible(ns) {
 
         // It's only worth deleting our old server if the new server will be 16x bigger or more (or if it's the biggest we can buy)
         if (exponentLevel == maxPurchasableServerRamExponent || worstServerRam * 16 <= maxRamPossibleToBuy) {
-            ns.run("remove-worst-server.js");
-            return setStatus(ns, `hostmanager.js requested to delete server ${worstServerName} (${formatRam(worstServerRam)} RAM) ` +
-                `to make room for a new ${formatRam(maxRamPossibleToBuy)} Server.`);
+            let upgradedServer = await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
+                '/Temp/host-manager-upgradeserver.txt', [purchasedServerName, exponentLevel]);
+            if (!upgradedServer) {
+                log(ns, `ERROR: upgrade for ${worstServerName} failed (from ${formatRam(worstServerRam)} RAM ` +
+                    `to  ${formatRam(maxRamPossibleToBuy)}).`, );
+            };
+            return log(ns, `upgraded ${worstServerName} RAM from ${formatRam(worstServerRam)} ` +
+                `to  ${formatRam(maxRamPossibleToBuy)} Server.`, true, 'success');
         } else {
             return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) is less than 16x the RAM ` +
                 `of the server it must delete to make room: ${worstServerName} (${formatRam(worstServerRam)} RAM)`);
