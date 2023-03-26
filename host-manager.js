@@ -173,7 +173,7 @@ async function tryToBuyBestServerPossible(ns) {
         const networkThreshold = options['compare-to-network-ram-threshold'];
         if (maxRamPossibleToBuy / totalMaxRam < networkThreshold)
             return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) on our budget of ${formatMoney(spendableMoney)} ` +
-                `is less than --compare-to-network-ram-threshold (${networkThreshold}) x total network RAM (${formatRam(ns. totalMaxRam)})`);
+                `is less than --compare-to-network-ram-threshold (${networkThreshold}) x total network RAM (${formatRam(ns, totalMaxRam)})`);
     }
 
     // Collect information about other previoulsy purchased servers
@@ -204,12 +204,13 @@ async function tryToBuyBestServerPossible(ns) {
         // It's only worth deleting our old server if the new server will be 16x bigger or more (or if it's the biggest we can buy)
         if (exponentLevel == maxPurchasableServerRamExponent || worstServerRam * 16 <= maxRamPossibleToBuy) {
             let upgradedServer = await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
-                '/Temp/host-manager-upgradeserver.txt', [purchasedServerName, exponentLevel]);
+                '/Temp/host-manager-upgradeserver.txt', [purchasedServerName, maxRamPossibleToBuy]);
             if (!upgradedServer) {
                 log(ns, `ERROR: upgrade for ${worstServerName} failed (from ${formatRam(ns, worstServerRam)} RAM ` +
                     `to  ${formatRam(ns, maxRamPossibleToBuy)}).`, );
+                return;
             };
-            return log(ns, `upgraded ${worstServerName} RAM from ${formatRam(ns, worstServerRam)} ` +
+            return log(ns, `upgraded ${worstServerName} RAM from ${formatRam(ns, worstServerRam, 3)} ` +
                 `to  ${formatRam(ns, maxRamPossibleToBuy)} Server.`, true, 'success');
         } else {
             return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) is less than 16x the RAM ` +

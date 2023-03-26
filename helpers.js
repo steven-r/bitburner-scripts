@@ -46,7 +46,7 @@ export function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 
 }
 
 /** Formats some RAM amount  */
-export function formatRam(ns, num) { return ns.nFormat(num, '0b'); }
+export function formatRam(ns, num) { return ns.nFormat(num*1e09, '0b'); }
 
 /** Return a datatime in ISO format */
 export function formatDateTime(datetime) { return datetime.toISOString(); }
