@@ -45,8 +45,8 @@ export function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 
     return num == 0.0 ? num : num.toFixed(Math.max(minDecimalPlaces, Math.max(0, minSignificantFigures - Math.ceil(Math.log10(num)))));
 }
 
-/** Formats some RAM amount as a round number of GB with thousands separators e.g. `1,028 GB` */
-export function formatRam(num) { return ns.nFormat(home.maxRam * 1E9, '0b'); }
+/** Formats some RAM amount  */
+export function formatRam(ns, num) { return ns.nFormat(num, '0b'); }
 
 /** Return a datatime in ISO format */
 export function formatDateTime(datetime) { return datetime.toISOString(); }
