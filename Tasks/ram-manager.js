@@ -25,9 +25,9 @@ export async function main(ns) {
         let cost = await getNsDataThroughFile(ns, `ns.singularity.getUpgradeHomeRamCost()`, `/Temp/getUpgradeHomeRamCost.txt`);
         let currentRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
         if (cost >= Number.MAX_VALUE || currentRam == max_ram)
-            return log(ns, `INFO: We're at max home RAM (${formatRam(currentRam)})`);
+            return log(ns, `INFO: We're at max home RAM (${formatRam(ns, currentRam)})`);
         const nextRam = currentRam * 2;
-        const upgradeDesc = `home RAM from ${formatRam(currentRam)} to ${formatRam(nextRam)} (cost: ${formatMoney(cost)})`;
+        const upgradeDesc = `home RAM from ${formatRam(ns, currentRam)} to ${formatRam(ns, nextRam)} (cost: ${formatMoney(cost)})`;
         if (spendable < cost)
             return log(ns, `Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
         if (!(await getNsDataThroughFile(ns, `ns.singularity.upgradeHomeRam()`, `/Temp/upgradeHomeRam.txt`)))

@@ -147,7 +147,7 @@ export async function main(ns) {
                 // Add Home RAM and Utilization
                 addHud("Home RAM", `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
                     `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
-                    `${formatRam(home.ramUsed)} of ${formatRam(home.maxRam)} (${formatRam(home.maxRam - home.ramUsed)} free)`);
+                    `${formatRam(ns, home.ramUsed)} of ${formatRam(ns, home.maxRam)} (${formatRam(ns, home.maxRam - home.ramUsed)} free)`);
                 // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
                 const includeHacknet = likelyHacknet.some(s => s.ramUsed > 0);
                 const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-server-")))
@@ -156,7 +156,7 @@ export async function main(ns) {
                 addHud("All RAM", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
                     `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                         (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
-                    `\nDetails: Using ${formatRam(totalUsed)} of ${formatRam(totalMax)} (${formatRam(totalMax - totalUsed)} free)`);
+                    `\nDetails: Using ${formatRam(ns, totalUsed)} of ${formatRam(ns, totalMax)} (${formatRam(ns, totalMax - totalUsed)} free)`);
             }
 
             // Show current share power

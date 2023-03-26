@@ -187,12 +187,12 @@ async function tryChargeAllFragments(ns, fragmentsToCharge) {
         const threads = Math.floor((availableRam - reservedRam) / 2.0);
         if (threads <= 0) {
             log(ns, `WARNING: Insufficient free RAM on ${currentServer} to charge Stanek ` +
-                `(${formatRam(availableRam)} free - ${formatRam(reservedRam)} reserved). Will try again later...`);
+                `(${formatRam(ns, availableRam)} free - ${formatRam(ns, reservedRam)} reserved). Will try again later...`);
             continue;
         }
         const pid = ns.run(chargeScript, threads, fragment.x, fragment.y);
         if (!pid) {
-            log(ns, `WARNING: Failed to charge Stanek with ${threads} threads thinking there was ${formatRam(availableRam)} free on ${currentServer}. ` +
+            log(ns, `WARNING: Failed to charge Stanek with ${threads} threads thinking there was ${formatRam(ns, availableRam)} free on ${currentServer}. ` +
                 `Check if another script is fighting stanek.js for RAM. Will try again later...`);
             continue;
         }

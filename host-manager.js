@@ -50,7 +50,7 @@ export async function main(ns) {
 
     // Get the maximum size of purchased servers in this bitnode
     maxPurchasableServerRamExponent = await getNsDataThroughFile(ns, 'Math.log2(ns.getPurchasedServerMaxRam())', '/Temp/host-max-ram-exponent.txt');
-    log(ns, `INFO: Max purchasable RAM has been detected as 2^${maxPurchasableServerRamExponent} (${formatRam(2 ** maxPurchasableServerRamExponent)}).`);
+    log(ns, `INFO: Max purchasable RAM has been detected as 2^${maxPurchasableServerRamExponent} (${formatRam(ns, 2 ** maxPurchasableServerRamExponent)}).`);
 
     // Gather one-time info in advance about how much RAM each size of server costs (Up to 2^30 to be future-proof, but we expect everything abouve 2^20 to be Infinity)
     costByRamExponent = await getNsDataThroughFile(ns, 'Object.fromEntries([...Array(30).keys()].map(i => [i, ns.getPurchasedServerCost(2**i)]))', '/Temp/host-costs.txt');
@@ -60,13 +60,13 @@ export async function main(ns) {
     minRamExponent = options['min-ram-exponent'];
     // Log the command line options, for new users who don't know why certain decisions are/aren't being made
     if (minRamExponent > maxPurchasableServerRamExponent) {
-        log(ns, `WARN: --min-ram-exponent was set to ${minRamExponent} (${formatRam(2 ** minRamExponent)}), ` +
-            `but the maximum server RAM in this BN is ${maxPurchasableServerRamExponent} (${formatRam(2 ** maxPurchasableServerRamExponent)}), ` +
+        log(ns, `WARN: --min-ram-exponent was set to ${minRamExponent} (${formatRam(ns, 2 ** minRamExponent)}), ` +
+            `but the maximum server RAM in this BN is ${maxPurchasableServerRamExponent} (${formatRam(ns, 2 ** maxPurchasableServerRamExponent)}), ` +
             `so the minimum has been lowered accordingly.`);
         minRamExponent = maxPurchasableServerRamExponent;
     } else
         log(ns, `INFO: --min-ram-exponent is set to ${minRamExponent}: New servers will only be purchased ` +
-            `if we can afford 2^${minRamExponent} (${formatRam(2 ** minRamExponent)}) or more in size.`);
+            `if we can afford 2^${minRamExponent} (${formatRam(ns, 2 ** minRamExponent)}) or more in size.`);
     log(ns, `INFO: --compare-to-home-threshold is set to ${options['compare-to-home-threshold'] * 100}%: ` +
         `New servers are deemed "not worthwhile" unless they are at least this big compared to your home server.`);
     log(ns, `INFO: --compare-to-network-ram-threshold is set to ${options['compare-to-network-ram-threshold'] * 100}%: ` +
@@ -113,13 +113,13 @@ async function tryToBuyBestServerPossible(ns) {
             rootedServers = rootedServers.filter(s => !likelyHacknet.includes(s));
             log(ns, `Removing ${likelyHacknet.length} hacknet servers from RAM statistics since they are not being utilized.`)
         } else if (!keepRunning)
-            log(ns, `We are currently using ${formatRam(totalHacknetUsedRam)} of hacknet RAM, so including hacknet in our utilization stats.`)
+            log(ns, `We are currently using ${formatRam(ns, totalHacknetUsedRam)} of hacknet RAM, so including hacknet in our utilization stats.`)
     }
 
     const totalMaxRam = rootedServers.reduce((t, s) => t + ns.getServerMaxRam(s), 0);
     const totalUsedRam = rootedServers.reduce((t, s) => t + ns.getServerUsedRam(s), 0);
     const utilizationRate = totalUsedRam / totalMaxRam;
-    setStatus(ns, `Using ${Math.round(totalUsedRam).toLocaleString('en')}/${formatRam(totalMaxRam)} (` +
+    setStatus(ns, `Using ${formatRam(ns, totalUsedRam)}/${formatRam(ns, totalMaxRam)} (` +
         `${(utilizationRate * 100).toFixed(1)}%) across ${rootedServers.length} servers ` +
         `(Triggers at ${options['utilization-trigger'] * 100}%, ${purchasedServers.length} bought so far)`);
 
@@ -156,7 +156,7 @@ async function tryToBuyBestServerPossible(ns) {
     // Don't buy if it would put us below our reserve (shouldn't happen, since we calculated how much to buy based on reserve amount)
     if (spendableMoney < cost)
         return setStatus(ns, `${prefix}spendableMoney (${formatMoney(spendableMoney)}) is less than the cost ` +
-            `of even the cheapest server (${formatMoney(cost)} for ${formatRam(2 ** exponentLevel)})`);
+            `of even the cheapest server (${formatMoney(cost)} for ${formatRam(ns, 2 ** exponentLevel)})`);
     // Don't buy if we can't afford our configured --min-ram-exponent
     if (exponentLevel < minRamExponent)
         return setStatus(ns, `${prefix}The highest ram exponent we can afford (2^${exponentLevel} for ${formatMoney(cost)}) on our budget ` +
@@ -167,13 +167,13 @@ async function tryToBuyBestServerPossible(ns) {
         const homeThreshold = options['compare-to-home-threshold'];
         // Unless we're looking at buying the maximum purchasable server size - in which case we can do no better
         if (maxRamPossibleToBuy < ns.getServerMaxRam("home") * homeThreshold)
-            return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) on our budget of ${formatMoney(spendableMoney)} ` +
-                `is less than --compare-to-home-threshold (${homeThreshold}) x home RAM (${formatRam(ns.getServerMaxRam("home"))})`);
+            return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) on our budget of ${formatMoney(spendableMoney)} ` +
+                `is less than --compare-to-home-threshold (${homeThreshold}) x home RAM (${formatRam(ns, ns.getServerMaxRam("home"))})`);
         // Abort if purchasing this server wouldn't improve our total RAM by more than x% (ensures we buy in meaningful increments)
         const networkThreshold = options['compare-to-network-ram-threshold'];
         if (maxRamPossibleToBuy / totalMaxRam < networkThreshold)
-            return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) on our budget of ${formatMoney(spendableMoney)} ` +
-                `is less than --compare-to-network-ram-threshold (${networkThreshold}) x total network RAM (${formatRam(totalMaxRam)})`);
+            return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) on our budget of ${formatMoney(spendableMoney)} ` +
+                `is less than --compare-to-network-ram-threshold (${networkThreshold}) x total network RAM (${formatRam(ns. totalMaxRam)})`);
     }
 
     // Collect information about other previoulsy purchased servers
@@ -186,19 +186,19 @@ async function tryToBuyBestServerPossible(ns) {
 
     // Abort if our worst previously-purchased server is better than the one we're looking to buy (ensures we buy in sane increments of capacity)
     if (worstServerName != null && maxRamPossibleToBuy < worstServerRam && !options['allow-worse-purchases'])
-        return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) on our budget of ` +
-            `${formatMoney(spendableMoney)} is less than our worst purchased server ${worstServerName}'s RAM ${formatRam(worstServerRam)}`);
+        return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) on our budget of ` +
+            `${formatMoney(spendableMoney)} is less than our worst purchased server ${worstServerName}'s RAM ${formatRam(ns, worstServerRam)}`);
     // Only buy new servers as good as or better than our best bought server (anything less is deemed a regression in value)
     if (bestServerRam != null && maxRamPossibleToBuy < bestServerRam && !options['allow-worse-purchases'])
-        return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) on our budget of ` +
-            `${formatMoney(spendableMoney)} is less than our previously purchased server ${bestServerName} RAM ${formatRam(bestServerRam)}`);
+        return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) on our budget of ` +
+            `${formatMoney(spendableMoney)} is less than our previously purchased server ${bestServerName} RAM ${formatRam(ns, bestServerRam)}`);
 
     // if we're at capacity, check to see if we can do better better than the current worst purchased server. If so, delete it to make room.
     if (purchasedServers.length >= maxPurchasedServers) {
         if (worstServerRam == maxPurchasableServerRam) {
             keepRunning = false;
             return setStatus(ns, `INFO: We are at the max number of servers ${maxPurchasedServers}, ` +
-                `and all have the maximum possible RAM (${formatRam(maxPurchasableServerRam)}).`);
+                `and all have the maximum possible RAM (${formatRam(ns, maxPurchasableServerRam)}).`);
         }
 
         // It's only worth deleting our old server if the new server will be 16x bigger or more (or if it's the biggest we can buy)
@@ -206,22 +206,22 @@ async function tryToBuyBestServerPossible(ns) {
             let upgradedServer = await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
                 '/Temp/host-manager-upgradeserver.txt', [purchasedServerName, exponentLevel]);
             if (!upgradedServer) {
-                log(ns, `ERROR: upgrade for ${worstServerName} failed (from ${formatRam(worstServerRam)} RAM ` +
-                    `to  ${formatRam(maxRamPossibleToBuy)}).`, );
+                log(ns, `ERROR: upgrade for ${worstServerName} failed (from ${formatRam(ns, worstServerRam)} RAM ` +
+                    `to  ${formatRam(ns, maxRamPossibleToBuy)}).`, );
             };
-            return log(ns, `upgraded ${worstServerName} RAM from ${formatRam(worstServerRam)} ` +
-                `to  ${formatRam(maxRamPossibleToBuy)} Server.`, true, 'success');
+            return log(ns, `upgraded ${worstServerName} RAM from ${formatRam(ns, worstServerRam)} ` +
+                `to  ${formatRam(ns, maxRamPossibleToBuy)} Server.`, true, 'success');
         } else {
-            return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(maxRamPossibleToBuy)}) is less than 16x the RAM ` +
-                `of the server it must delete to make room: ${worstServerName} (${formatRam(worstServerRam)} RAM)`);
+            return setStatus(ns, `${prefix}the most RAM we can buy (${formatRam(ns, maxRamPossibleToBuy)}) is less than 16x the RAM ` +
+                `of the server it must delete to make room: ${worstServerName} (${formatRam(ns, worstServerRam)} RAM)`);
         }
     }
 
     let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`,
         '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     if (!purchasedServer)
-        setStatus(ns, `${prefix}Could not purchase a server with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
+        setStatus(ns, `${prefix}Could not purchase a server with ${formatRam(ns, maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
     else
-        log(ns, `SUCCESS: Purchased a new server ${purchasedServer} with ${formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
+        log(ns, `SUCCESS: Purchased a new server ${purchasedServer} with ${formatRam(ns, maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
 }
