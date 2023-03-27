@@ -20,7 +20,9 @@ const symbols = ["", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "e33", "e
 export function formatNumberShort(num, maxSignificantFigures = 6, maxDecimalPlaces = 3) {
     if (Math.abs(num) > 10 ** (3 * symbols.length)) // If we've exceeded our max symbol, switch to exponential notation
         return num.toExponential(Math.min(maxDecimalPlaces, maxSignificantFigures - 1));
-    for (var i = 0, sign = Math.sign(num), num = Math.abs(num); num >= 1000 && i < symbols.length; i++) num /= 1000;
+    const sign = Math.sign(num);
+    num = Math.abs(num);
+    for (var i = 0; num >= 1000 && i < symbols.length; i++) num /= 1000;
     // TODO: A number like 9.999 once rounded to show 3 sig figs, will become 10.00, which is now 4 sig figs.
     return ((sign < 0) ? "-" : "") + num.toFixed(Math.max(0, Math.min(maxDecimalPlaces, maxSignificantFigures - Math.floor(1 + Math.log10(num))))) + symbols[i];
 }
@@ -165,7 +167,7 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName, arg
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs);
     // Wait for the process to complete. Note, as long as the above returned a pid, we don't actually have to check it, just the file contents
-    const fnIsAlive = (ignored_pid) => ns.read(fName) === initialContents;
+    const fnIsAlive = () => ns.read(fName) === initialContents;
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
     if (verbose) log(ns, `Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying. 
@@ -401,9 +403,9 @@ export async function tryGetBitNodeMultipliers(ns) {
 export async function tryGetBitNodeMultipliers_Custom(ns, fnGetNsDataThroughFile) {
     checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
     let canGetBitNodeMultipliers = false;
-    try { canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile)); } catch { }
+    try { canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile)); } catch { /* empty */ }
     if (!canGetBitNodeMultipliers) return null;
-    try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-multipliers.txt'); } catch { }
+    try { return await fnGetNsDataThroughFile(ns, 'ns.getBitNodeMultipliers()', '/Temp/bitnode-multipliers.txt'); } catch { /* empty */ }
     return null;
 }
 

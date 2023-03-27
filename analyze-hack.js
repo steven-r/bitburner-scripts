@@ -8,7 +8,7 @@ const argsSchema = [
     ['include-hacknet-ram', false], // Whether to include hacknet servers' RAM when computing current ram available
 ];
 
-export function autocomplete(data, args) {
+export function autocomplete(data, _args) {
     data.flags(argsSchema);
     return [];
 }
@@ -109,7 +109,7 @@ export async function main(ns) {
         .map(function (server) {
             // We will need to fake the hacking skill to get the numbers for when this server will first be unlocked, but to keep the comparison
             // fair, we will need to scale down the gain by the amount current best server gains now, verses what it would gain at that hack level.
-            const [bestUnlockedScaledGainRate, _, bestUnlockedScaledExpRate] = getRatesAtHackLevel(best_unlocked_server, player, server.requiredHackingSkill);
+            const [bestUnlockedScaledGainRate, , bestUnlockedScaledExpRate] = getRatesAtHackLevel(best_unlocked_server, player, server.requiredHackingSkill);
             const gainRateScaleFactor = best_unlocked_server.theoreticalGainRate / bestUnlockedScaledGainRate;
             const expRateScaleFactor = best_unlocked_server.expRate / bestUnlockedScaledExpRate;
             const [theoreticalGainRate, cappedGainRate, expRate] = getRatesAtHackLevel(server, player, server.requiredHackingSkill);

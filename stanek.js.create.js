@@ -5,7 +5,7 @@ const argsSchema = [
 	['force-width', null], // Force the layout less than or equal to the specified width
 	['force-height', null], // Force the layout less than or equal to the specified height
 ];
-export function autocomplete(data, args) {
+export function autocomplete(data, _args) {
 	data.flags(argsSchema);
 	return [];
 }
@@ -213,54 +213,3 @@ const layouts = [ // NOTE: Width appears to be always the same as, or one more t
 	}
 
 ];
-
-// Not used for anything, but captures our rough priorities when designing the above layouts
-const priorities = [
-	{ id: 25, weight: 13.0 }, /* Faction Rep */
-	{ id: 0, weight: 12.0 }, /* Hack Mult */
-	{ id: 1, weight: 11.0 }, /* Hack Mult */
-	// Generally prefer adding one of these stats over triple-boosting the above
-	{ id: 5, weight: 1.15 }, /* Hack Speed */
-	{ id: 20, weight: 1.14 }, /* Hacknet Prod */
-	{ id: 21, weight: 1.13 }, /* Hacknet Cost */
-	{ id: 6, weight: 1.12 }, /* Hack Power */
-	{ id: 7, weight: 1.11 }, /* Grow Power */
-	{ id: 30, weight: 1.10 }, /* Bladeburner */
-	{ id: 16, weight: 1.09 }, /* Agi */
-	{ id: 14, weight: 1.08 }, /* Dex */
-	// Generally prefer additional boost over the below
-	{ id: 28, weight: 0.99 }, /* Crime Money */
-	{ id: 18, weight: 0.98 }, /* Cha */
-	{ id: 10, weight: 0.97 }, /* Str */
-	{ id: 12, weight: 0.96 }, /* Def */
-	{ id: 28, weight: 0.95 }, /* Work Money */
-]
-
-// Not used, but these alternative layouts favour fitting more stat pieces vs. boosting most important stats, use if you please
-const alternativeLayouts = [
-	{
-		"height": 3, "width": 4, "fragments": [
-			{ "id": 0, "x": 1, "y": 0, "rotation": 0 }, // Hacking Chance
-			{ "id": 25, "x": 0, "y": 0, "rotation": 1 }, // Reputation
-			{ "id": 28, "x": 1, "y": 1, "rotation": 0 }, // Crime Money
-		]
-	}, {
-		"height": 4, "width": 4, "fragments": [
-			{ "id": 0, "x": 0, "y": 2, "rotation": 2 }, // Hacking Chance
-			{ "id": 7, "x": 2, "y": 1, "rotation": 3 }, // Grow power
-			{ "id": 25, "x": 0, "y": 0, "rotation": 1 }, // Reputation
-			{ "id": 30, "x": 1, "y": 0, "rotation": 0 }, // Bladeburner
-		]
-	}, {
-		"height": 6, "width": 6, "fragments": [
-			{ "id": 0, "x": 0, "y": 2, "rotation": 0 }, // Hacking Chance
-			{ "id": 1, "x": 0, "y": 4, "rotation": 0 }, // Hacking Chance
-			{ "id": 5, "x": 2, "y": 1, "rotation": 0 }, // Hacking Speed
-			{ "id": 6, "x": 2, "y": 0, "rotation": 0 }, // Hack power
-			{ "id": 7, "x": 2, "y": 3, "rotation": 2 }, // Grow power
-			{ "id": 20, "x": 5, "y": 1, "rotation": 1 }, // Hacknet Production
-			{ "id": 21, "x": 0, "y": 0, "rotation": 0 }, // Hacknet Cost Reduction
-			{ "id": 25, "x": 3, "y": 4, "rotation": 0 }, // Reputation
-		]
-	}
-]

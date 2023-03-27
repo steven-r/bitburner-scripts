@@ -27,7 +27,7 @@ const argsSchema = [
     ['reputation-threshold', 0.2], // By default, if we are this close to the rep needed for an unowned stanek upgrade (e.g. "Stanek's Gift - Serenity"), we will keep charging despite the 'max-charges' setting
 ];
 
-export function autocomplete(data, args) {
+export function autocomplete(data, _args) {
     data.flags(argsSchema);
     return [];
 }
@@ -93,7 +93,7 @@ export async function main(ns) {
         const [awakeningOwned, serenityOwned] = [ownedAugmentations.includes(strAwakening), ownedAugmentations.includes(strSerenity)];
         if (!awakeningOwned || !serenityOwned) {
             [awakeningRep, serenityRep] = await getNsDataThroughFile(ns,
-                `[${[strAwakening, strSerenity].map(a => `ns.singularity.getAugmentationRepReq(\"${a}\")`)}]`,
+                `[${[strAwakening, strSerenity].map(a => `ns.singularity.getAugmentationRepReq("${a}")`)}]`,
                 '/Temp/stanek-aug-rep-reqs.txt');
             log(ns, `INFO: Stanek Augmentations Rep Requirements are Awakening: ${formatNumberShort(awakeningRep)}, ` +
                 `Serenity: ${formatNumberShort(serenityRep)} (--reputation-threshold = ${options['reputation-threshold']})`);
@@ -105,6 +105,7 @@ export async function main(ns) {
 
     // Start the main stanek loop
     let lastLoopSuccessful = true;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         await ns.sleep(lastLoopSuccessful ? 10 : 1000); // Only sleep a short while between charges if things are going well
         lastLoopSuccessful = false;

@@ -62,6 +62,7 @@ export async function main(ns) {
     if (!(10 in ownedSourceFiles))
         return ns.tprint("WARNING: You cannot run sleeve.js until you do BN10.");
     // Start the main loop
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         try { await mainLoop(ns); }
         catch (err) {
@@ -345,7 +346,7 @@ async function setSleeveTask(ns, i, designatedTask, command, args) {
             log(ns, `SUCCESS: ${strAction}`);
             return true;
         }
-    } catch { }
+    } catch { /* empty */ }
     // If assigning the task failed...
     lastRerollTime[i] = 0;
     // If working for a faction, it's possible he current work isn't supported, so try the next one.

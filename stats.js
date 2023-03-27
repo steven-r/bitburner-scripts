@@ -9,7 +9,7 @@ const argsSchema = [
     ['hide-RAM-utilization', false],
 ];
 
-export function autocomplete(data, args) {
+export function autocomplete(data, _args) {
     data.flags(argsSchema);
     return [];
 }
@@ -43,6 +43,7 @@ export async function main(ns) {
     };
 
     // Main stats update loop
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         try {
             // Show what bitNode we're currently playing in

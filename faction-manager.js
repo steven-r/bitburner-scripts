@@ -292,7 +292,7 @@ async function updateAugmentationData(ns, desiredAugs) {
         owned: simulatedOwnedAugmentations.includes(aug),
         reputation: dictAugRepReqs[aug],
         price: dictAugPrices[aug],
-        stats: Object.fromEntries(Object.entries(dictAugStats[aug]).filter(([k, v]) => v != 1)),
+        stats: Object.fromEntries(Object.entries(dictAugStats[aug]).filter(([, v]) => v != 1)),
         prereqs: dictAugPrereqs[aug] || [],
         desired: desiredAugs.includes(aug) ||  // Mark as "desired" augs explicitly requested, or those with stats in the 'stat-desired' command line options
             desiredStatsFilters.includes('*') || desiredStatsFilters.includes('_') || // Wildcards - all stats are desired (_ is for backwards compatibility when all stat names ended with '_mult')
@@ -376,7 +376,7 @@ async function joinFactions(ns, forceJoinFactions) {
         else {
             log(ns, `Joining faction ${faction.name} which has ${desiredAugs.length} desired augmentations: ${desiredAugs}`);
             let response;
-            if (response = await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, '/Temp/join-faction.txt', [faction.name])) {
+            if ((response = await getNsDataThroughFile(ns, `ns.singularity.joinFaction(ns.args[0])`, '/Temp/join-faction.txt', [faction.name]))) {
                 faction.joined = true;
                 faction.augmentations.forEach(aug => accessibleAugmentations.add(aug));
                 joinedFactions.push(faction.name);
@@ -416,33 +416,6 @@ function sortAugs(ns, augs = []) {
     }
     // TODO: Logic below is **almost** working, except that the "batch detection" is flawed - it does not detect when multiple separate
     //       "trees" of dependencies with a common root are side-by-side (e.g. "Embedded Netburner Module" tree). Until fixed, we cannot bubble.
-    return augs;
-    // Since we are no longer most-expensive to least-expensive, the "ideal purchase order" is more complicated.
-    // So now see if moving each chunk of prereqs down a slot reduces the overall price.
-    let initialCost = getTotalCost(augs);
-    let totalMoves = 0;
-    for (let i = augs.length - 1; i > 0; i--) {
-        let batchLengh = 1; // Look for a "batch" of prerequisites, evidenced by augs above this one being cheaper instead of more expensive
-        while (i - batchLengh >= 0 && augs[i].price > augs[i - batchLengh].price) batchLengh++;
-        if (batchLengh == 1) continue; // Not the start of a batch of prerequisites
-        //log(ns, `Detected a batch of length ${batchLengh} from ${augs[i - batchLengh + 1].name} to ${augs[i].name}`);
-        let moved = 0, bestCost = initialCost;
-        while (i + moved + 1 < augs.length) { // See if promoting augs from below the batch to above the batch reduces the overall cost
-            let testOrder = augs.slice(), moveIndex = i + moved + 1, insertionIndex = i - batchLengh + 1 + moved;
-            testOrder.splice(insertionIndex, 0, testOrder.splice(moveIndex, 1)[0]); // Try moving it above the batch
-            let newCost = getTotalCost(testOrder);
-            //log(ns, `Cost would change by ${((newCost - bestCost) / bestCost * 100).toPrecision(2)}% from ${formatMoney(bestCost)} to ${formatMoney(newCost)} by buying ${augs[moveIndex].name} before ${augs[insertionIndex].name}`);
-            if (bestCost < newCost) break; // If the cost is worse or the same, stop shifting augs
-            //log(ns, `Cost reduced by ${formatMoney(bestCost - newCost)} from ${formatMoney(bestCost)} to ${formatMoney(newCost)} by buying ${augs[moveIndex].name} before ${augs[insertionIndex].name}`);
-            bestCost = newCost;
-            augs.splice(insertionIndex, 0, augs.splice(moveIndex, 1)[0]); // Found a cheaper sort order - lock in the move!
-            moved++;
-        }
-        i = i - batchLengh + 1; // Decrement i to past the batch so it doesn't try to change the batch's own order
-        totalMoves += moved;
-    }
-    let finalCost = getTotalCost(augs);
-    if (totalMoves > 0) log(ns, `Cost reduced by ${formatMoney(initialCost - finalCost)} (from ${formatMoney(initialCost)} to ${formatMoney(finalCost)}) by bubbling ${totalMoves} augs up above batches of dependencies.`);
     return augs;
 }
 
@@ -577,10 +550,10 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             }
             let costBefore = getCostString(totalAugCost, totalRepCost);
             purchaseableAugs = sortAugs(ns, purchaseableAugs.filter(aug => aug !== mostExpensiveAug));
-            [purchaseFactionDonations, totalRepCost, totalAugCost] = computeCosts(purchaseableAugs);;
+            [purchaseFactionDonations, totalRepCost, totalAugCost] = computeCosts(purchaseableAugs);
             let costAfter = getCostString(totalAugCost, totalRepCost);
             dropped.unshift({ aug: mostExpensiveAug, costBefore, costAfter });
-            log(ns, `Dropping aug from the purchase order: \"${mostExpensiveAug.name}\". New total cost: ${costAfter}`);
+            log(ns, `Dropping aug from the purchase order: "${mostExpensiveAug.name}". New total cost: ${costAfter}`);
         }
     } while (restart);
 
@@ -589,7 +562,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
 
     // The the user know about some of the next upcoming augs / import augs that had to be dropped
     let nextUpAug = dropped.length == 0 ? null : `Next desired aug available at:`.padEnd(37) + ` ${dropped[0].costBefore}  ` +
-        `for \"${dropped[0].aug.name}\" from "${dropped[0].aug.getFromJoined()}" (cheapest of ${dropped.length} dropped augs)`
+        `for "${dropped[0].aug.name}" from "${dropped[0].aug.getFromJoined()}" (cheapest of ${dropped.length} dropped augs)`
     if (nextUpAug && options['neuroflux-disabled']) outputRows.push(nextUpAug); // Output this now if we will be exiting early, otherwise save for after the last table.
     if (augsAwaitingInstall > 0)
         outputRows.push(`WARNING: Prices all have a x ${formatNumberShort(augCountMult ** augsAwaitingInstall)} cost penalty, because ` +
@@ -707,7 +680,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     manageFilteredSubset(ns, outputRows, `(${purchaseableAugs.length - nfPurchased} Augs + ${nfPurchased} NF)`, purchaseableAugs, true, false, false);
     if (nextUpAug) outputRows.push(nextUpAug);
     if (nextUpNf) outputRows.push(nextUpNf);
-};
+}
 
 /** @param {NS} ns 
  * Find out the optimal set of factions and rep-donations required to access them */

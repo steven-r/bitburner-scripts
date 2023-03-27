@@ -54,7 +54,7 @@ let planBoostersCount = 0;
   *             overlapWithBoosters: Int16Array; overlapWithStats: Int16Array }} Placement */
 /** @typedef {{ stats: Placement[]; boosters: Placement[] }} Plan */
 
-export function autocomplete(data, args) {
+export function autocomplete(_data, _args) {
 	return [...Object.keys(FragmentType)];
 }
 
@@ -74,9 +74,9 @@ export async function main(ns) {
 	// 1. Set up priority order of stat fragments to include
 	const targetIds = [
 		FragmentId.Rep, FragmentId.Hacking2, FragmentId.Hacking1, // Basics, always want
-		, FragmentId.HackingSpeed, // Priority 2, improve hack EXP gain and income?
-		, FragmentId.HacknetMoney, FragmentId.HacknetCost // Priority 3, hacknet good for lots of things?
-		, FragmentId.HackingGrow, FragmentId.HackingMoney // Priority 4, improves growth, income for RAM from hacking?
+		FragmentId.HackingSpeed, // Priority 2, improve hack EXP gain and income?
+		FragmentId.HacknetMoney, FragmentId.HacknetCost, // Priority 3, hacknet good for lots of things?
+		FragmentId.HackingGrow, FragmentId.HackingMoney // Priority 4, improves growth, income for RAM from hacking?
 		//etc...
 	];
 	const allFragments = ns.stanek.fragmentDefinitions();
@@ -240,7 +240,7 @@ async function planStats(ns, statPlacements, boosterPlacements, statFragsKeys, b
 	if (planStatsCount % 100000 == 0)
 		await ns.sleep(0); // Don't hang the game
 
-	let [currentBestScore, _] = bestResult;
+	let [currentBestScore, ] = bestResult;
 	currentBestScore = currentBestScore || 0;
 
 	// If at least one fragment has been placed, see what the best score is we can get by adding boosters

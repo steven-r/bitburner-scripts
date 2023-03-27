@@ -11,8 +11,9 @@ export async function main(ns) {
     if (!keepRunning)
         ns.print(`program-manager will run once. Run with argument "-c" to run continuously.`)
 
+    let foundMissingProgram;
     do {
-        let foundMissingProgram = false;
+        foundMissingProgram = false;
         for (const prog of programNames) {
             if (!ns.fileExists(prog, "home") && ns.singularity.purchaseProgram(prog))
                 ns.toast(`Purchased ${prog}`, 'success');

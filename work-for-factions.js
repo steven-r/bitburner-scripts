@@ -73,7 +73,7 @@ const preferredCrimeFactionOrder = ["Slum Snakes", "Tetrads", "Speakers for the 
 // Gang factions in order of ease-of-invite. If gangs are available, as we near 54K Karma to unlock gangs (as per --karma-threshold-for-gang-invites), we will attempt to get into any/all of these.
 const desiredGangFactions = ["Slum Snakes", "The Syndicate", "The Dark Army", "Speakers for the Dead"];
 // Previously this was needed because you couldn't work for any gang factions once in a gang, but that was changed.
-const allGangFactions = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Tetrads", "Slum Snakes", "The Black Hand", "NiteSec"];
+// const allGangFactions = ["Speakers for the Dead", "The Dark Army", "The Syndicate", "Tetrads", "Slum Snakes", "The Black Hand", "NiteSec"];
 
 const loopSleepInterval = 5000; // 5 seconds
 const statusUpdateInterval = 60 * 1000; // 1 minute (outside of this, minor updates in e.g. stats aren't logged)
@@ -144,6 +144,7 @@ export async function main(ns) {
 
     mainLoopStart = Date.now();
     scope = 0;
+    // eslint-disable-next-line no-constant-condition
     while (true) { // After each loop, we will repeat all prevous work "strategies" to see if anything new has been unlocked, and add one more "strategy" to the queue
         try {
             await mainLoop(ns);
@@ -442,7 +443,7 @@ async function earnFactionInvite(ns, factionName) {
     // Study for hack levels if that's what's keeping us
     // Note: Check if we have insuffient hack to backdoor this faction server. If we have sufficient hack, we will "waitForInvite" below assuming an external script is backdooring ASAP 
     let serverReqHackingLevel = 0;
-    if (requirement = requiredBackdoorByFaction[factionName]) {
+    if ((requirement = requiredBackdoorByFaction[factionName])) {
         serverReqHackingLevel = await getServerRequiredHackLevel(ns, requirement);
         if (player.skills.hacking < serverReqHackingLevel) {
             ns.print(`${reasonPrefix} you must first backdoor ${requirement}, which needs hack: ${serverReqHackingLevel}, Have: ${player.skills.hacking}`);

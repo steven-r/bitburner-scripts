@@ -64,6 +64,7 @@ export async function main(ns) {
     // Gather one-time info such as contract and operation names
     await gatherBladeburnerInfo(ns);
     // Start the main loop which monitors stats and changes activities as needed
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         try { await mainLoop(ns); }
         catch (err) {
@@ -183,7 +184,7 @@ async function mainLoop(ns) {
     if (getCount("Raid") > 0 && unreservedActions.every(c => getCount(c) == 0)) {
         const raidableCities = cityNames.filter(c => communitiesByCity[c] > 0); // Cities with at least one community
         // Only allow Raid if we would not be raiding our highest-population city (need to maintain at least one)
-        const [highestPopCity, _] = getMaxKeyValue(populationByCity, cityNames);
+        const [highestPopCity, ] = getMaxKeyValue(populationByCity, cityNames);
         goingRaiding = raidableCities.length > 0 && (raidableCities[0] != highestPopCity || options['allow-raiding-highest-pop-city']);
         if (goingRaiding) { // Select the raid-able city with the smallest population
             [goToCity, population] = getMinKeyValue(populationByCity, raidableCities);
@@ -360,6 +361,7 @@ async function switchToCity(ns, city, reason) {
 /** @param {NS} ns 
  * Decides how to spend skill points. */
 async function spendSkillPoints(ns) {
+    // eslint-disable-next-line no-constant-condition
     while (true) { // Loop until we determine there's nothing left to spend skill points on
         const unspent = await getBBInfo(ns, 'getSkillPoints()');
         if (unspent == 0) return;

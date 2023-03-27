@@ -133,6 +133,7 @@ const codingContractTypesMetadata = [{
         let l = 0
         let r = n - 1
         let k = 0
+        // eslint-disable-next-line no-constant-condition
         while (true) {
             // Up
             for (let col = l; col <= r; col++) {

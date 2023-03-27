@@ -149,7 +149,7 @@ async function getPlayerInfo(ns) {
 
 function playerHackSkill() { return _cachedPlayerInfo.skills.hacking; }
 
-function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.mults.hacking_grow; };
+function getPlayerHackingGrowMulti() { return _cachedPlayerInfo.mults.hacking_grow; }
 
 /** @param {NS} ns
  * @returns {Promise<{ type: "COMPANY"|"FACTION"|"CLASS"|"CRIME", cyclesWorked: number, crimeType: string, classType: string, location: string, companyName: string, factionName: string, factionWorkType: string }>} */
@@ -471,7 +471,7 @@ async function runPeriodicScripts(ns) {
     if (9 in dictSourceFiles && !options['disable-spend-hashes'] // See if we have a hacknet, and spending hashes for money isn't disabled
         && ns.getServerMoneyAvailable("home") < options['spend-hashes-for-money-when-under'] // Only if money is below the configured threshold
         && (ns.getServerMaxRam("home") - ns.getServerUsedRam("home")) >= 5.6) { // Ensure we have spare RAM to run this temp script
-        await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for \$1M', 'success')`, '/Temp/sell-hashes-for-money.js');
+        await runCommand(ns, `0; if(ns.hacknet.spendHashes("Sell for Money")) ns.toast('Sold 4 hashes for $1M', 'success')`, '/Temp/sell-hashes-for-money.js');
     }
 }
 
@@ -611,7 +611,7 @@ async function doTargetingLoop(ns) {
 
             // check for servers that need to be rooted
             // simultaneously compare our current target to potential targets
-            for (var i = 0; i < targetingOrder.length; i++) {
+            for (i = 0; i < targetingOrder.length; i++) {
                 if ((Date.now() - start) >= maxLoopTime) { // To avoid lagging the game, completely break out of the loop if we start to run over
                     skipped.push(...targetingOrder.slice(i));
                     workCapped = true;
@@ -1173,7 +1173,7 @@ async function performScheduling(ns, currentTarget, snapshot) {
         const newBatchStart = new Date((cyclesScheduled === 0) ? Date.now() + queueDelay : lastBatch.getTime() + cycleTimingDelay);
         lastBatch = new Date(newBatchStart.getTime());
         const batchTiming = getScheduleTiming(newBatchStart, currentTarget);
-        if (verbose && runOnce) logSchedule(batchTiming, currentTarget); // Special log for troubleshooting batches
+        if (verbose && runOnce) logSchedule(ns, batchTiming, currentTarget); // Special log for troubleshooting batches
         const newBatch = getScheduleObject(batchTiming, currentTarget, scheduledTasks.length);
         if (firstEnding === null) { // Can't start anything after this first hack completes (until back at min security), or we risk throwing off timing
             firstEnding = new Date(newBatch.hackEnd.valueOf());
@@ -1212,7 +1212,7 @@ async function performScheduling(ns, currentTarget, snapshot) {
 }
 
 /** Produces a special log for troubleshooting cycle schedules */
-let logSchedule = (schedule, currentTarget) =>
+let logSchedule = (ns, schedule, currentTarget) =>
     log(ns, `Current Time: ${formatDateTime(new Date())} Established a schedule for ${getTargetSummary(currentTarget)} from requested startTime ${formatDateTime(schedule.batchStart)}:` +
         `\n  Hack - End: ${formatDateTime(schedule.hackEnd)}  Start: ${formatDateTime(schedule.hackStart)}  Time: ${formatDuration(currentTarget.timeToHack())}` +
         `\n  Weak1- End: ${formatDateTime(schedule.firstWeakenEnd)}  Start: ${formatDateTime(schedule.firstWeakenStart)}  Time: ${formatDuration(currentTarget.timeToWeaken())}` +
@@ -1292,8 +1292,8 @@ function getScheduleObject(batchTiming, currentTarget, batchNumber) {
             Math.ceil(((injectThreads + schedGrowThreads) * growthThreadHardening / actualWeakenPotency()).toPrecision(14)));
         if (verbose) log(_ns, `INFO: Special grow strategy since percentage stolen per hack thread is 100%: G1: ${injectThreads}, G1: ${schedGrowThreads}, W2: ${schedWeak2.threadsNeeded} (${currentTarget.name})`);
     } else {
-        var schedGrow = getScheduleItem("grow", "grow", batchTiming.growStart, batchTiming.growEnd, currentTarget.getGrowThreadsNeededAfterTheft());
-        var schedWeak2 = getScheduleItem("weak2", "weak", batchTiming.secondWeakenStart, batchTiming.secondWeakenEnd, currentTarget.getWeakenThreadsNeededAfterGrowth());
+        schedGrow = getScheduleItem("grow", "grow", batchTiming.growStart, batchTiming.growEnd, currentTarget.getGrowThreadsNeededAfterTheft());
+        schedWeak2 = getScheduleItem("weak2", "weak", batchTiming.secondWeakenStart, batchTiming.secondWeakenEnd, currentTarget.getWeakenThreadsNeededAfterGrowth());
     }
 
     if (hackOnly) {
@@ -1545,22 +1545,6 @@ async function farmHackXp(ns, fractionOfFreeRamToConsume = 1, verbose = false, n
     }
     // Wait for all job scheduling threads to return, and sleep for the smallest cycle time remaining
     return Math.max(0, Math.min(...etas));
-}
-
-// In case we've misfired a bit, this helper can wait a short while to see if we can start a new cycle right as the last one completes.
-async function waitForCycleEnd(ns, server, maxWaitTime = 200, waitInterval = 5) {
-    const eta = nextXpCycleEnd[server.name];
-    if (verbose) return log(ns, `WARNING: ${server.name} FarmXP process is still in progress from a prior run. Completion time is unknown...`);
-    const activeCycleTimeLeft = (eta || 0) - Date.now();
-    let stillBusy;
-    if (verbose) log(ns, `Waiting for last ${server.name} FarmXP process to complete... (ETA ${eta ? formatDuration(activeCycleTimeLeft) : 'unknown'})`);
-    while (stillBusy = server.isXpFarming(false) && maxWaitTime > 0) {
-        await ns.sleep(waitInterval); // Sleep a very short while, then get a fresh process list to check again whether the process is done
-        maxWaitTime -= waitInterval;
-    }
-    if (stillBusy)
-        log(ns, `WARNING: ${server.name} FarmXP process is ` + (eta ? `more than ${formatDuration(-activeCycleTimeLeft)} overdue...` : 'still in progress from a prior run...'));
-    return !stillBusy;
 }
 
 let farmXpReentryLock = []; // A dictionary of server names and whether we're currently scheduling / polling for its cycle to end
@@ -1878,7 +1862,7 @@ class Tool {
     /** @returns {boolean} true if the server has this tool and enough ram to run it. */
     canRun(server) {
         return doesFileExist(_ns, this.name, server.name) && server.ramAvailable() >= this.cost;
-    };
+    }
     /** @param {boolean} allowSplitting - Whether max threads is computed across the largest server, or all servers (defaults to this.isThreadSpreadingAllowed)
      * @returns {number} The maximum number of threads we can run this tool with given the ram present. */
     getMaxThreads(allowSplitting = undefined) {

@@ -77,6 +77,7 @@ export async function main(ns) {
 
     await initialize(ns);
     log(ns, "Starting main loop...");
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         try { await mainLoop(ns); }
         catch (err) {

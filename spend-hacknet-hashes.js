@@ -48,6 +48,7 @@ export async function main(ns) {
         `Saving up hashes, only spending hashes when near capacity to avoid wasting them.`);
     // Function determines the current cheapest upgrade of all the upgrades we wish to keep purchasing
     const getMinCost = spendActions => Math.min(...spendActions.map(p => ns.hacknet.hashCost(p)));
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         await ns.sleep(interval);
         try {

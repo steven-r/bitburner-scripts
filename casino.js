@@ -140,6 +140,7 @@ export async function main(ns) {
 	if (saveSleepTime) await ns.sleep(saveSleepTime);
 
 	// Step 4: Play until we lose
+	// eslint-disable-next-line no-constant-condition
 	while (true) {
 		const bet = Math.min(1E8, ns.getPlayer().money * 0.9 /* Avoid timing issues with other scripts spending money */);
 		if (bet < 0) return await reload(ns); // If somehow we have no money, we can't continue

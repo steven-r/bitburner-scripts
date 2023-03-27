@@ -209,7 +209,7 @@ async function tryToBuyBestServerPossible(ns) {
                 log(ns, `ERROR: upgrade for ${worstServerName} failed (from ${formatRam(ns, worstServerRam)} RAM ` +
                     `to  ${formatRam(ns, maxRamPossibleToBuy)}).`, );
                 return;
-            };
+            }
             return log(ns, `upgraded ${worstServerName} RAM from ${formatRam(ns, worstServerRam, 3)} ` +
                 `to  ${formatRam(ns, maxRamPossibleToBuy)} Server.`, true, 'success');
         } else {

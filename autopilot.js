@@ -71,6 +71,7 @@ export async function main(ns) {
 			`only way to now turn this back off will be to manually edit or delete the file ${ns.getScriptName()}.config.txt`, true);
 
 	let startUpRan = false;
+	// eslint-disable-next-line no-constant-condition
 	while (true) {
 		try {
 			// Start-up actions, wrapped in error handling in case of temporary failures
@@ -150,7 +151,7 @@ async function persistConfigChanges(ns) {
 
 /** Logic run once at the beginning of a new BN
  * @param {NS} ns */
-async function initializeNewBitnode(ns, player) {
+async function initializeNewBitnode(_ns, _player) {
 	// Nothing to do here (yet)
 }
 
@@ -512,7 +513,7 @@ async function maybeInstallAugmentations(ns, player) {
 	let totalCost = facman.total_rep_cost + facman.total_aug_cost;
 	const augSummary = `${uniqueAugCount} of ${facman.unowned_count - 1} remaining augmentations` +
 		(facman.affordable_nf_count > 0 ? ` + ${facman.affordable_nf_count} levels of NeuroFlux.` : '.') +
-		(uniqueAugCount > 0 ? `\n  Augs: [\"${facman.affordable_augs.join("\", \"")}\"]` : '');
+		(uniqueAugCount > 0 ? `\n  Augs: ["${facman.affordable_augs.join("\", \"")}"]` : '');
 	let resetStatus = `Reserving ${formatMoney(totalCost)} to install ${augSummary}`
 	let shouldReset = options['install-for-augs'].some(a => facman.affordable_augs.includes(a)) ||
 		affordableAugCount >= augsNeeded || (affordableAugCount + facman.affordable_nf_count - 1) >= augsNeededInclNf;

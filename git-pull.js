@@ -76,7 +76,7 @@ async function repositoryListing(ns, folder = '') {
         // Sadly, we must recursively retrieve folders, which eats into our 60 free API requests per day.
         const folders = response.filter(f => f.type == "dir").map(f => f.path);
         let files = response.filter(f => f.type == "file").map(f => f.path)
-            .filter(f => options.extension.some(ext => f.endsWith(ext)));
+            .filter(f => !f.startsWith('.') && options.extension.some(ext => f.endsWith(ext)));
         ns.print(`The following files exist at ${listUrl}\n${files.join(", ")}`);
         for (const folder of folders)
             files = files.concat((await repositoryListing(ns, folder))
@@ -87,7 +87,7 @@ async function repositoryListing(ns, folder = '') {
         ns.tprint(`WARNING: Failed to get a repository listing (GitHub API request limit of 60 reached?): ${listUrl}` +
             `\nResponse Contents (if available): ${JSON.stringify(response ?? '(N/A)')}\nError: ${String(error)}`);
         // Fallback, assume the user already has a copy of all files in the repo, and use it as a directory listing
-        return ns.ls('home').filter(name => options.extension.some(ext => f.endsWith(ext)) &&
+        return ns.ls('home').filter(name => options.extension.some(ext => name.endsWith(ext)) &&
             !options['omit-folder'].some(dir => name.startsWith(dir)));
     }
 }

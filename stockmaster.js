@@ -60,7 +60,7 @@ const argsSchema = [
     ['buy-4s-budget', 0.8], // Maximum corpus value we will sacrifice in order to buy 4S. Setting to 0 will never buy 4s.
 ];
 
-export function autocomplete(data, args) {
+export function autocomplete(data, _args) {
     data.flags(argsSchema);
     return [];
 }
@@ -152,6 +152,7 @@ export async function main(ns) {
         `If you choose to stop the script, make sure you SELL all your stocks (can go 'run ${ns.getScriptName()} --liquidate') to get your money back.\n\nGood luck!\n~ Insight\n\n`)
 
     let pre4s = true;
+    // eslint-disable-next-line no-constant-condition
     while (true) {
         try {
             const playerStats = await getPlayerInfo(ns);
@@ -259,7 +260,7 @@ async function getStockInfoDict(ns, stockFunction) {
     return await getNsDataThroughFile(ns,
         `Object.fromEntries(ns.args.map(sym => [sym, ns.stock.${stockFunction}(sym)]))`,
         `/Temp/stock-${stockFunction}.txt`, allStockSymbols);
-};
+}
 
 /** @param {NS} ns **/
 async function initAllStocks(ns) {
@@ -443,8 +444,6 @@ let launchSummaryTail = async ns => {
 }
 
 // Ram-dodging helpers that spawn temporary scripts to buy/sell rather than pay 2.5GB ram per variant
-let buyStockWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'buyStock'); // ns.stock.buyStock(sym, numShares);
-let buyShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'buyShort'); // ns.stock.buyShort(sym, numShares);
 let sellStockWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'sellStock'); // ns.stock.sellStock(sym, numShares);
 let sellShortWrapper = async (ns, sym, numShares) => await transactStock(ns, sym, numShares, 'sellShort'); // ns.stock.sellShort(sym, numShares);
 let transactStock = async (ns, sym, numShares, action) =>
