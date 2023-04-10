@@ -160,7 +160,7 @@ function PrintLine(ns, columns, data, style, printfunc = ns.print, highlight) {
 		else if (data[c].color != undefined)
 			printStack.push(CreateStyle(data[c].color, highlight), formatValue(columns[c], data[c].text, _CONTENT));
 		else
-			printStack.push(CreateStyle('white', highlight), formatValue(columns[c], data[c].text, _CONTENT));
+			printStack.push(CreateStyle('white', highlight), formatValue(columns[c], data[c], _CONTENT));
 		printStack.push('white', style[0][BAR]);
 	}
 
