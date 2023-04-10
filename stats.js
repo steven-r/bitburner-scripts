@@ -1,6 +1,6 @@
 import {
     log, disableLogs, instanceCount, getConfiguration, getNsDataThroughFile, getActiveSourceFiles,
-    getStocksValue, formatNumberShort, formatMoney, formatRam
+    getStocksValue, formatNumberShort, formatMoney
 } from './helpers.js'
 
 const argsSchema = [
@@ -146,9 +146,9 @@ export async function main(ns) {
                         `(${purchased - likelyHacknet.length} servers + ${likelyHacknet.length} hacknet servers)` : `(${purchased})`));
                 const home = servers.find(s => s.hostname == "home");
                 // Add Home RAM and Utilization
-                addHud("Home RAM", `${ns.nFormat(home.maxRam * 1E9, '0b')} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
+                addHud("Home RAM", `${ns.formatRam(home.maxRam)} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
                     `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
-                    `${formatRam(ns, home.ramUsed)} of ${formatRam(ns, home.maxRam)} (${formatRam(ns, home.maxRam - home.ramUsed)} free)`);
+                    `${ns.formatRam(home.ramUsed)} of ${ns.formatRam(home.maxRam)} (${ns.formatRam(home.maxRam - home.ramUsed)} free)`);
                 // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
                 const includeHacknet = likelyHacknet.some(s => s.ramUsed > 0);
                 const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-server-")))
@@ -157,7 +157,7 @@ export async function main(ns) {
                 addHud("All RAM", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
                     `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                         (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
-                    `\nDetails: Using ${formatRam(ns, totalUsed)} of ${formatRam(ns, totalMax)} (${formatRam(ns, totalMax - totalUsed)} free)`);
+                    `\nDetails: Using ${ns.formatRam(totalUsed)} of ${ns.formatRam(totalMax)} (${ns.formatRam(totalMax - totalUsed)} free)`);
             }
 
             // Show current share power

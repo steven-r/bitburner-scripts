@@ -47,9 +47,6 @@ export function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 
     return num == 0.0 ? num : num.toFixed(Math.max(minDecimalPlaces, Math.max(0, minSignificantFigures - Math.ceil(Math.log10(num)))));
 }
 
-/** Formats some RAM amount  */
-export function formatRam(ns, num) { return ns.nFormat(num*1e09, '0b'); }
-
 /** Return a datatime in ISO format */
 export function formatDateTime(datetime) { return datetime.toISOString(); }
 

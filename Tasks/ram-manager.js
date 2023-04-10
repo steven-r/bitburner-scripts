@@ -1,4 +1,4 @@
-import { formatMoney, formatRam, getConfiguration, getNsDataThroughFile, log } from './helpers.js'
+import { formatMoney, getConfiguration, getNsDataThroughFile, log } from './helpers.js'
 
 const max_ram = 2 ** 30;
 const argsSchema = [
@@ -25,9 +25,9 @@ export async function main(ns) {
         let cost = await getNsDataThroughFile(ns, `ns.singularity.getUpgradeHomeRamCost()`, `/Temp/getUpgradeHomeRamCost.txt`);
         let currentRam = await getNsDataThroughFile(ns, `ns.getServerMaxRam(ns.args[0])`, `/Temp/getServerMaxRam.txt`, ["home"]);
         if (cost >= Number.MAX_VALUE || currentRam == max_ram)
-            return log(ns, `INFO: We're at max home RAM (${formatRam(ns, currentRam)})`);
+            return log(ns, `INFO: We're at max home RAM (${ns.formatRam(currentRam)})`);
         const nextRam = currentRam * 2;
-        const upgradeDesc = `home RAM from ${formatRam(ns, currentRam)} to ${formatRam(ns, nextRam)} (cost: ${formatMoney(cost)})`;
+        const upgradeDesc = `home RAM from ${ns.formatRam(currentRam)} to ${ns.formatRam(nextRam)} (cost: ${formatMoney(cost)})`;
         if (spendable < cost)
             return log(ns, `Money we're allowed to spend (${formatMoney(spendable)}) is less than the cost (${formatMoney(cost)}) to upgrade ${upgradeDesc}`);
         if (!(await getNsDataThroughFile(ns, `ns.singularity.upgradeHomeRam()`, `/Temp/upgradeHomeRam.txt`)))
