@@ -587,6 +587,19 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
             ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` +
                 (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
         }
+        const json_status = {
+            work: 'crime',
+            crime,
+            forever,
+            probability: crimeChances[crime],
+            req: {
+                karma: reqKarma ?? "--",
+                kills: reqKills ?? "--",
+                stats: reqStats ?? "--"
+            }
+        }
+        ns.write('/Temp/current-work.txt', JSON.stringify(json_status), "w");
+
         // Sleep for some multiple of the crime time to avoid interrupting a crime in progress on the next status update
         let sleepTime = 1 + Math.ceil(loopSleepInterval / crimeTime) * crimeTime;
         await ns.sleep(sleepTime);
@@ -622,6 +635,12 @@ async function study(ns, focus, course, university = null) {
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.universityCourse(ns.args[0], ns.args[1], ns.args[2])`, '/Temp/study.txt', [university, course, focus])) {
         log(ns, `Started studying '${course}' at '${university}'`, false, 'success');
+        const json_status = {
+            work: 'study',
+            university,
+            course
+        }
+        ns.write('/Temp/current-work.txt', JSON.stringify(json_status), "w");
         return true;
     }
     log(ns, `ERROR: For some reason, failed to study '${course}' at university '${university}' (Not in correct city? Player is in '${playerCity}')`, false, 'error');
@@ -837,6 +856,13 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             }
         }
 
+        const json_status = {
+            work: 'faction',
+            job: bestFactionJob,
+            factionName: factionName,
+            target_rep: Math.round(factionRepRequired),
+        }
+
         let status = `Doing '${bestFactionJob}' work for "${factionName}" until ${Math.round(factionRepRequired).toLocaleString('en')} rep.`;
         if (lastFactionWorkStatus != status || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             lastFactionWorkStatus = status;
@@ -844,9 +870,13 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             // Measure approximately how quickly we're gaining reputation to give a rough ETA
             const repGainRate = await measureFactionRepGainRate(ns, factionName);
             const eta_milliseconds = 1000 * (factionRepRequired - currentReputation) / repGainRate;
+            json_status.current_rep = Math.round(currentReputation);
+            json_status.eta = eta_milliseconds;
+            json_status.penalty = hasFocusPenalty && !shouldFocus;
             ns.print(`${status} Currently at ${Math.round(currentReputation).toLocaleString('en')}, ` +
                 `earning ${formatNumberShort(repGainRate)} rep/sec. ` +
                 (hasFocusPenalty && !shouldFocus ? '(after 20% non-focus Penalty) ' : '') + `(ETA: ${formatDuration(eta_milliseconds)})`);
+            ns.write("/Temp/current-work.txt", JSON.stringify(json_status), "w");
         }
         await tryBuyReputation(ns);
         await ns.sleep(loopSleepInterval);
@@ -1106,6 +1136,30 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName);
             const eta = !isWorking ? "?" : formatDuration(1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate);
             player = await getPlayerInfo(ns);
+            const json_status = {
+                work: 'invite',
+                job: player.jobs[companyName],
+                current: {
+                    role: currentRole,
+                    tier: currentJobTier,
+                    hack: player.skills.hacking,
+                    charisma: player.skills.charisma,
+                    reputation: currentReputation
+                },
+                next: {
+                    role: nextJobName,
+                    tier: nextJobTier,
+                    hack: requiredHack,
+                    charisma: requiredCha,
+                    reputation: requiredRep
+                },
+                eta: !isWorking ? undefined : 1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate,
+                companyName,
+                rate: repGainRate,
+                penalty: hasFocusPenalty && !shouldFocus,
+            }
+            ns.write("/Temp/current-work.txt", JSON.stringify(json_status), "w");
+    
             ns.print(`Currently a "${player.jobs[companyName]}" ('${currentRole}' #${currentJobTier}) for "${companyName}" earning ${formatNumberShort(repGainRate)} rep/sec. ` +
                 (hasFocusPenalty && !shouldFocus ? `(after 20% non-focus Penalty)` : '') + `\n` +
                 `${status}\nCurrent player stats are Hack:${player.skills.hacking} ${player.skills.hacking >= (requiredHack || 0) ? '✓' : '✗'} ` +

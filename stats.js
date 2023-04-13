@@ -1,6 +1,6 @@
 import {
     log, disableLogs, instanceCount, getConfiguration, getNsDataThroughFile, getActiveSourceFiles,
-    getStocksValue, formatNumberShort, formatMoney
+    getStocksValue, formatNumberShort, formatMoney, formatDuration
 } from './helpers.js'
 
 const argsSchema = [
@@ -15,6 +15,7 @@ export function autocomplete(data, _args) {
 }
 
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
+const currentWorkFile = '/Temp/current-work.txt'; // Temp file produced by work-for-faction.js
 
 /** @param {NS} ns **/
 export async function main(ns) {
@@ -146,7 +147,7 @@ export async function main(ns) {
                         `(${purchased - likelyHacknet.length} servers + ${likelyHacknet.length} hacknet servers)` : `(${purchased})`));
                 const home = servers.find(s => s.hostname == "home");
                 // Add Home RAM and Utilization
-                addHud("Home RAM", `${ns.formatRam(home.maxRam)} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
+                addHud("Home RAM", `${ns.formatRam(home.maxRam, 0)} ${(100 * home.ramUsed / home.maxRam).toFixed(1)}%`,
                     `Shows total home RAM (and current utilization %)\nDetails: ${home.cpuCores} cores and using ` +
                     `${ns.formatRam(home.ramUsed)} of ${ns.formatRam(home.maxRam)} (${ns.formatRam(home.maxRam - home.ramUsed)} free)`);
                 // If the user has any scripts running on hacknet servers, assume they want them included in available RAM stats
@@ -154,7 +155,7 @@ export async function main(ns) {
                 const [totalMax, totalUsed] = servers.filter(s => s.hasAdminRights && (includeHacknet || !s.hostname.startsWith("hacknet-server-")))
                     .reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
                 // Add Total Network RAM and Utilization
-                addHud("All RAM", `${ns.nFormat(totalMax * 1E9, '0b')} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
+                addHud("All RAM", `${ns.formatRam(totalMax, 0)} ${(100 * totalUsed / totalMax).toFixed(1)}%`,
                     `Shows the sum-total RAM and utilization across all rooted hosts on the network` + (9 in dictSourceFiles || 9 == bitNode ?
                         (includeHacknet ? "\n(including hacknet servers, because you have scripts running on them)" : " (excluding hacknet servers)") : "") +
                     `\nDetails: Using ${ns.formatRam(totalUsed)} of ${ns.formatRam(totalMax)} (${ns.formatRam(totalMax - totalUsed)} free)`);
@@ -167,6 +168,19 @@ export async function main(ns) {
                     "Uses RAM to boost faction reputation gain rate while working for factions (capped at 1.5) " +
                     "\nRun `daemon.js` with the `--no-share` flag to disable.");
 
+            // show work progress
+            const currentWorkOutput = ns.read(currentWorkFile);
+            if (currentWorkOutput !== '') {
+                const currentWork = JSON.parse(currentWorkOutput);
+                if (currentWork.work === 'faction' && currentWork.target_rep != 0) {
+                    addHud("work done", `${ns.formatPercent(currentWork.current_rep / currentWork.target_rep, 1)}`, `Work done (${ns.formatNumber(currentWork.current_rep, 0)} / ${ns.formatNumber(currentWork.target_rep, 0)})`);
+                    // skip seconds
+                    addHud("- ETA", `${formatDuration(Math.round(currentWork.eta / (60.0 * 1000.0), 0) * 60.0 * 1000.0)}`, '');
+                } else if (currentWork.work === 'invite' && currentWork.eta !== undefined) {
+                    addHud("invite ETA", formatDuration(Math.round(currentWork.eta / (60.0 * 1000.0), 0) * 60.0 * 1000.0), '');
+                }
+            }
+        
             // Clear the previous loop's custom HUDs
             hook1.innerHTML = hook0.innerHTML = "";
             // Create new HUD elements with info collected above.
