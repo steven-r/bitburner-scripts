@@ -1,6 +1,6 @@
 import { runCommand } from './helpers.js'
 
-export function autocomplete(data, args) {
+export function autocomplete(_data, _args) {
 	return [
 		"bladeburner", "codingcontract", "corporation", "enums", "formulas", "gang", "grafting", "hacknet",
 		"infiltration", "singularity", "sleeve", "stanek", "stock", "ui"
