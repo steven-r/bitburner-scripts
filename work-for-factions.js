@@ -960,10 +960,12 @@ async function detectBestFactionWork(ns, factionName) {
     return bestWork;
 }
 
-/** @param {NS} ns 
- *  @param {Array<string>} megacorpFactionsInPreferredOrder - The list of all corporate factions to work for, sorted in the order they should be worked for
- *  @param {Array<string>} megacorpFactionsInPreferredOrder - The list of all corporate factions, sorted in the order they should be worked for
- * */
+/** 
+ * @param {NS} ns 
+ * @param {Array<string>} megacorpFactionsInPreferredOrder - The list of all corporate factions, sorted in the order they should be worked for
+ * @param {boolean} alsoWorkForCompanyFactions
+ * @param {boolean} oneCompanyFactionAtATime
+ */
 export async function workForAllMegacorps(ns, megacorpFactionsInPreferredOrder, alsoWorkForCompanyFactions, oneCompanyFactionAtATime) {
     let player = await getPlayerInfo(ns);
     if (player.skills.hacking < 225)
@@ -989,8 +991,11 @@ export async function workForAllMegacorps(ns, megacorpFactionsInPreferredOrder, 
     }
 }
 
-/** Helper to spend hashes on something and return the amount of hashes spent (if any)
- * @param {NS} ns */
+/** 
+ * Helper to spend hashes on something and return the amount of hashes spent (if any)
+ * @param {NS} ns 
+ * @param {number} # of hashes to spend
+ */
 async function trySpendHashes(ns, spendOn) {
     return await getNsDataThroughFile(ns,
         'ns.hacknet.numHashes() + ns.hacknet.spendHashes(ns.args[0]) - ns.hacknet.numHashes()',
@@ -1001,7 +1006,7 @@ async function trySpendHashes(ns, spendOn) {
  * @param {NS} ns */
 export async function tryBuyReputation(ns) {
     if (options['no-coding-contracts']) return;
-    if ((await getPlayerInfo(ns)).money > 100E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
+    if ((await getPlayerInfo(ns)).money > 10E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
         let spentHashes = await trySpendHashes(ns, "Generate Coding Contract");
         if (spentHashes > 0) {
             log(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, false, 'success');
