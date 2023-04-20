@@ -281,7 +281,11 @@ async function mainLoop(ns) {
     }
 
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
-    let priorityFactions = options['crime-focus'] ? preferredCrimeFactionOrder.slice() : preferredEarlyFactionOrder.slice();
+    const facmanSuggestionsStr = ns.read("/Temp/NextSuitableFactionsBasedOnPlan.txt");
+    const facmanSuggestions = facmanSuggestionsStr.length > 0 ? JSON.parse(facmanSuggestionsStr) : [];
+    let priorityFactions = options['crime-focus'] 
+        ? preferredCrimeFactionOrder.slice()
+        : [].contat(facmanSuggestions, preferredEarlyFactionOrder.slice());
     if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
         priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
         ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
@@ -1110,7 +1114,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
         // Regardless of the earlier promotion logic, always try for a promotion to make sure we don't miss a promotion due to buggy logic 
         if (await tryApplyToCompany(ns, companyName, currentRole)) {
             player = await getPlayerInfo(ns); // Find out what our new job is
-            log(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${player.jobs[companyName]}. Promotion logic must be off..."`, false, 'warning');
+            log(ns, `Unexpected '${currentRole}' promotion from ${currentJob} to "${player.jobs[companyName]}". Promotion logic must be off...`, false, 'warning');
         }
 
         // If not studying, ensure we are working for this company

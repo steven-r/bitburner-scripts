@@ -29,7 +29,7 @@ let factionNames = [], joinedFactions = [], desiredStatsFilters = [], purchaseFa
 let ownedAugmentations = [], simulatedOwnedAugmentations = [], effectiveSourceFiles = [], allAugStats = [], priorityAugs = [], purchaseableAugs = [];
 let factionData = {}, augmentationData = {};
 let printToTerminal, ignorePlayerData;
-let _ns; // Used to avoid passing ns to functions that don't need it except for some logs.
+let desiredAugs = [];
 
 let options = null; // A copy of the options used at construction time
 const argsSchema = [ // The set of all command line arguments
@@ -94,7 +94,6 @@ export async function main(ns) {
     const runOptions = getConfiguration(ns, argsSchema);
     if (!runOptions || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
     options = runOptions; // We don't set the global "options" until we're sure this is the only running instance
-    _ns = ns;
 
     // Ensure all globals are reset before we proceed with the script, in case we've done things out of order
     augCountMult = favorToDonate = playerData = gangFaction = startingPlayerMoney = stockValue = null;
@@ -208,10 +207,12 @@ async function getGangInfo(ns) {
 
 // Helper function to make multi names shorter for display in a table
 function shorten(mult) {
-    return mult.replace("_mult", "").replace("company", "cmp").replace("faction", "fac").replace("money", "$").replace("crime", "crm")
-        .replace("agility", "agi").replace("strength", "str").replace("charisma", "cha").replace("defense", "def").replace("dexterity", "dex").replace("hacking", "hack")
-        .replace("hacknet_node", "hn").replace("bladeburner", "bb").replace("stamina", "stam")
-        .replace("success_chance", "success").replace("success", "prob").replace("chance", "prob");
+    return mult.replace("_mult", "").replace("company", "C").replace("speed", "sp")
+        .replace("faction", "f").replace("money", "$").replace("crime", "cr")
+        .replace("agility", "a").replace("strength", "s").replace("charisma", "c")
+        .replace("defense", "d").replace("dexterity", "x").replace("hacking", "h")
+        .replace("hacknet_node", "hn").replace("bladeburner", "bb").replace("stamina", "st")
+        .replace("success_chance", "sc").replace("success", "p").replace("chance", "p");
 }
 
 // Helper function to take a shortened multi name provided by the user and map it to a real multi
@@ -313,11 +314,40 @@ async function updateAugmentationData(ns, desiredAugs) {
                 this.joinedFactionsWithAug().filter(f => f.donationsUnlocked).sort((a, b) => getReqDonationForAug(this, a) - getReqDonationForAug(this, b))[0] ||
                 this.joinedFactionsWithAug()[0])?.name;
         },
+        toArray: function() {
+            const statKeys = Object.keys(this.stats);
+            let statsString;
+            if (statKeys.length == 26) { // NF 
+                statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + 
+                ` { *: ${Object.values(this.stats)[0]} }`;
+            } else {
+                statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + (statKeys.length == 0 ? '' :
+                ` { ${statKeys.map(prop => shorten(prop) + ': ' + Math.round((this.stats[prop] + Number.EPSILON) * 100) / 100).join(', ')} }`);
+            }
+            const factionName = this.getFromJoined() || this.getFromAny;
+            const budget = playerData.money + stockValue;
+            const augNameShort = this.displayName;
+            return [
+                this.desired ? '*' : '',
+                formatMoney(this.price, 4) + this.price <= budget ? '✓' : '✗',
+                formatNumberShort(this.reputation, 4),
+                this.canAfford() ? '✓' : this.canAffordWithDonation() ? '$' : '✗',
+                factionName,
+                augNameShort,
+                statsString,
+            ];
+        },
         toString: function () {
             const factionColWidth = 16, augColWidth = 40, statsColWidth = 60;
             const statKeys = Object.keys(this.stats);
-            const statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + (statKeys.length == 0 ? '' :
+            let statsString;
+            if (statKeys.length == 26) { // NF 
+                statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + 
+                ` { *: ${Object.values(this.stats)[0]} }`;
+            } else {
+                statsString = `Stats:${statKeys.length.toFixed(0).padStart(2)}` + (statKeys.length == 0 ? '' :
                 ` { ${statKeys.map(prop => shorten(prop) + ': ' + Math.round((this.stats[prop] + Number.EPSILON) * 100) / 100).join(', ')} }`);
+            }
             const factionName = this.getFromJoined() || this.getFromAny;
             const fCreep = Math.max(0, factionName.length - factionColWidth);
             const budget = playerData.money + stockValue;
@@ -443,7 +473,7 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
         await manageFilteredSubset(ns, outputRows, 'Available', availableAugs.filter(aug => aug.name != strNF), true);
     if (countAvailable > 0) {
         let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
-        let desiredAugs = availableAugs.filter(aug => aug.desired);
+        desiredAugs = availableAugs.filter(aug => aug.desired);
         if (augsWithRep.length > desiredAugs.length) {
             augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep)
             desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs);
@@ -464,8 +494,8 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
 
 /** @param {[]} sortedAugs 
  * Helper to compute the total rep cost for augmentations, including the cost of donating for access. */
-function computeCosts(sortedAugs) {
-    const repCostByFaction = computeAugsRepReqDonationByFaction(sortedAugs);
+function computeCosts(ns, sortedAugs) {
+    const repCostByFaction = computeAugsRepReqDonationByFaction(ns, sortedAugs);
     const totalRepCost = Object.values(repCostByFaction).reduce((t, r) => t + r, 0);
     const totalAugCost = getTotalCost(sortedAugs);
     return [repCostByFaction, totalRepCost, totalAugCost];
@@ -509,7 +539,7 @@ async function manageFilteredSubset(ns, outputRows, subsetName, subset, printLis
     }
     // Sort the filtered subset into its optimal purchase order
     let subsetSorted = reorder ? sortAugs(ns, subset.slice()) : subset;
-    let [repCostByFaction, totalRepCost, totalAugCost] = computeCosts(subsetSorted);
+    let [repCostByFaction, totalRepCost, totalAugCost] = computeCosts(ns, subsetSorted);
     // By default, if the purchase order is unchanged after filtering out augmentations, don't bother reprinting the full list
     if (printList === true || printList !== false && options['show-all-purchase-lists'] && !subset.every((v, i) => v == subsetSorted[i]))
         outputRows.push(`${subset.length} ${subsetName} Augmentations in Optimized Purchase Order:\n  ${subsetSorted.join('\n  ')}`);
@@ -536,7 +566,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
         restart = false; // Flag as to whether we need to loop again with different starting set of priority augs
         dropped = [];
         purchaseableAugs = filterMissingPrereqs(ns, accessibleAugs.slice().filter(a => !droppedPriorityAugs.includes(a.name) && a.price + getReqDonationForAug(a) <= budget));
-        [purchaseFactionDonations, totalRepCost, totalAugCost] = computeCosts(purchaseableAugs);
+        [purchaseFactionDonations, totalRepCost, totalAugCost] = computeCosts(ns, purchaseableAugs);
         // Remove the most expensive augmentation until we can afford all that remain
         while (totalAugCost + totalRepCost > budget && purchaseableAugs.length > 0) {
             let mostExpensiveAug = purchaseableAugs.filter(a => !priorityAugs.includes(a.name)).slice().sort((a, b) => b.price - a.price)[0];
@@ -550,7 +580,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
             }
             let costBefore = getCostString(totalAugCost, totalRepCost);
             purchaseableAugs = sortAugs(ns, purchaseableAugs.filter(aug => aug !== mostExpensiveAug));
-            [purchaseFactionDonations, totalRepCost, totalAugCost] = computeCosts(purchaseableAugs);
+            [purchaseFactionDonations, totalRepCost, totalAugCost] = computeCosts(ns, purchaseableAugs);
             let costAfter = getCostString(totalAugCost, totalRepCost);
             dropped.unshift({ aug: mostExpensiveAug, costBefore, costAfter });
             log(ns, `Dropping aug from the purchase order: "${mostExpensiveAug.name}". New total cost: ${costAfter}`);
@@ -678,13 +708,18 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     // Add back free augmentations removed temporarily before inserting additional NF purchases
     purchaseableAugs.push(...cheapAugs);
     manageFilteredSubset(ns, outputRows, `(${purchaseableAugs.length - nfPurchased} Augs + ${nfPurchased} NF)`, purchaseableAugs, true, false, false);
+    const pa_names = purchaseableAugs.map(a => a.displayName);
+    const nextFacs = desiredAugs.filter(a => !pa_names.includes(a.displayName))
+        .map(a => a.getFromJoined() || a.getFromAny)
+        .filter((value, index, array) => array.indexOf(value) === index); // unique
+    ns.write("/Temp/NextSuitableFactionsBasedOnPlan.txt", JSON.stringify(nextFacs), "w");
     if (nextUpAug) outputRows.push(nextUpAug);
     if (nextUpNf) outputRows.push(nextUpNf);
 }
 
 /** @param {NS} ns 
  * Find out the optimal set of factions and rep-donations required to access them */
-function computeAugsRepReqDonationByFaction(augmentations) {
+function computeAugsRepReqDonationByFaction(ns, augmentations) {
     const repCostByFaction = {};
     for (const aug of augmentations) {
         let faction = factionData[aug.getFromJoined() || aug.getFromAny];
@@ -697,7 +732,7 @@ function computeAugsRepReqDonationByFaction(augmentations) {
             (repCostByFaction[f] >= reqDonation && (fDonationsIndex == -1 || i < fDonationsIndex)) || // We're donating the same or more to the other faction, and were planning on donating to it before this one
             ((getReqDonationForAug(aug, f) - repCostByFaction[f]) < (reqDonation - (repCostByFaction[faction.name] || 0))))); // The amount we've committed to donating the other faction is closer to this requirement
         if (alternativeFaction) {
-            log(_ns, `INFO: Using alternative faction "${alternativeFaction}" for "${aug.name}" rather than earlier faction "${faction.name}"`)
+            log(ns, `INFO: Using alternative faction "${alternativeFaction}" for "${aug.name}" rather than earlier faction "${faction.name}"`)
             aug.getFromJoined = () => alternativeFaction;
             reqDonation = getReqDonationForAug(aug, alternativeFaction);
             faction = factionData[alternativeFaction];
