@@ -193,7 +193,9 @@ async function tryToBuyBestServerPossible(ns) {
         return setStatus(ns, `${prefix}the most RAM we can buy (${ns.formatRam(maxRamPossibleToBuy)}) on our budget of ` +
             `${formatMoney(spendableMoney)} is less than our previously purchased server ${bestServerName} RAM ${ns.formatRam(bestServerRam)}`);
 
-    // if we're at capacity, check to see if we can do better better than the current worst purchased server. If so, delete it to make room.
+    let purchasedServer,
+        isUpgrade = false
+    // if we're at capacity, check to see if we can do better better than the current worst purchased server. If so, upgrade it.
     if (purchasedServers.length >= maxPurchasedServers) {
         if (worstServerRam == maxPurchasableServerRam) {
             keepRunning = false;
@@ -201,28 +203,17 @@ async function tryToBuyBestServerPossible(ns) {
                 `and all have the maximum possible RAM (${ns.formatRam(maxPurchasableServerRam)}).`);
         }
 
-        // It's only worth deleting our old server if the new server will be 16x bigger or more (or if it's the biggest we can buy)
-        if (exponentLevel == maxPurchasableServerRamExponent || worstServerRam * 16 <= maxRamPossibleToBuy) {
-            let upgradedServer = await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
-                '/Temp/host-manager-upgradeserver.txt', [purchasedServerName, maxRamPossibleToBuy]);
-            if (!upgradedServer) {
-                log(ns, `ERROR: upgrade for ${worstServerName} failed (from ${ns.formatRam(worstServerRam)} RAM ` +
-                    `to  ${ns.formatRam(maxRamPossibleToBuy)}).`, );
-                return;
-            }
-            return log(ns, `upgraded ${worstServerName} RAM from ${ns.formatRam(worstServerRam, 3)} ` +
-                `to  ${ns.formatRam(maxRamPossibleToBuy)} Server.`, true, 'success');
-        } else {
-            return setStatus(ns, `${prefix}the most RAM we can buy (${ns.formatRam(maxRamPossibleToBuy)}) is less than 16x the RAM ` +
-                `of the server it must delete to make room: ${worstServerName} (${ns.formatRam(worstServerRam)} RAM)`);
-        }
+        cost -= costByRamExponent[Math.log2(worstServerRam)]
+        isUpgrade = true
+        purchasedServer = (await getNsDataThroughFile(ns, `ns.upgradePurchasedServer(ns.args[0], ns.args[1])`,
+            '/Temp/upgradeServer.txt', [worstServerName, maxRamPossibleToBuy])) ? worstServerName : "";
+    } else {
+        purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`,
+            '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     }
-
-    let purchasedServer = await getNsDataThroughFile(ns, `ns.purchaseServer(ns.args[0], ns.args[1])`,
-        '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     if (!purchasedServer)
-        setStatus(ns, `${prefix}Could not purchase a server with ${ns.formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
+        setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${ns.formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
     else
-        log(ns, `SUCCESS: Purchased a new server ${purchasedServer} with ${ns.formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
+        log(ns, `SUCCESS: ${isUpgrade ? 'Upgraded' : 'Purchased'} server ${purchasedServer} with ${ns.formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
 }
