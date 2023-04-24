@@ -285,7 +285,7 @@ async function mainLoop(ns) {
     const facmanSuggestions = facmanSuggestionsStr.length > 0 ? JSON.parse(facmanSuggestionsStr) : [];
     let priorityFactions = options['crime-focus'] 
         ? preferredCrimeFactionOrder.slice()
-        : [].contat(facmanSuggestions, preferredEarlyFactionOrder.slice());
+        : [].concat(facmanSuggestions, preferredEarlyFactionOrder.slice());
     if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
         priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
         ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
