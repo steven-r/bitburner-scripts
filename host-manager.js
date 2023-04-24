@@ -212,8 +212,8 @@ async function tryToBuyBestServerPossible(ns) {
             '/Temp/purchaseServer.txt', [purchasedServerName, maxRamPossibleToBuy]);
     }
     if (!purchasedServer)
-        setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${ns.formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)} ` +
+        setStatus(ns, `${prefix}Could not ${isUpgrade ? 'upgrade' : 'purchase'} a server with ${ns.formatRam(maxRamPossibleToBuy,0)} RAM for ${formatMoney(cost)} ` +
             `with a budget of ${formatMoney(spendableMoney)}. This is either a bug, or we in a SF.9`);
     else
-        log(ns, `SUCCESS: ${isUpgrade ? 'Upgraded' : 'Purchased'} server ${purchasedServer} with ${ns.formatRam(maxRamPossibleToBuy)} RAM for ${formatMoney(cost)}`, true, 'success');
+        log(ns, `SUCCESS: ${isUpgrade ? 'Upgraded' : 'Purchased'} server ${purchasedServer} with ${ns.formatRam(maxRamPossibleToBuy,0)} RAM for ${formatMoney(cost)}`, true, 'success');
 }
