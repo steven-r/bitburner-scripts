@@ -52,7 +52,7 @@ export async function main(ns) {
     // Get the maximum size of purchased servers in this bitnode
     const purchasedServerMaxRam = await getNsDataThroughFile(ns, 'ns.getPurchasedServerMaxRam()');
     maxPurchasableServerRamExponent = Math.log2(purchasedServerMaxRam);
-    log(ns, `INFO: Max purchasable RAM has been detected as 2^${maxPurchasableServerRamExponent} (${formatRam(2 ** maxPurchasableServerRamExponent)}).`);
+    log(ns, `INFO: Max purchasable RAM has been detected as 2^${maxPurchasableServerRamExponent} (${ns.formatRam(2 ** maxPurchasableServerRamExponent)}).`);
 
     // Gather one-time info in advance about how much RAM each size of server costs (Up to 2^30 to be future-proof, but we expect everything abouve 2^20 to be Infinity)
     costByRamExponent = await getNsDataThroughFile(ns, 'Object.fromEntries([...Array(30).keys()].map(i => [i, ns.getPurchasedServerCost(2**i)]))', '/Temp/host-costs.txt');
