@@ -337,42 +337,6 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
     return hudData;
 }
 
-/** @param {NS} ns **/
-export async function main(ns) {
-    const options = getConfiguration(ns, argsSchema);
-    if (!options || await instanceCount(ns) > 1) return; // Prevent multiple instances of this script from being started, even with different args.
-
-    const dictSourceFiles = await getActiveSourceFiles(ns, false); // Find out what source files the user has unlocked
-    const playerInfo = await getNsDataThroughFile(ns, 'ns.getPlayer()', '/Temp/getPlayer.txt');
-    const bitNode = playerInfo.bitNodeN;
-    disableLogs(ns, ['sleep']);
-
-    // Hook script exit to clean up after ourselves.
-    ns.atExit(() => hook1.innerHTML = hook0.innerHTML = "")
-
-    addCSS(doc);
-
-    prepareHudElements(await getHudData(ns, bitNode, dictSourceFiles, options))
-
-    // Main stats update loop
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-        try {
-            const hudData = await getHudData(ns, bitNode, dictSourceFiles, options)
-
-            // update HUD elements with info collected above.
-            for (const [header, show, formattedValue, toolTip] of hudData) {
-                updateHudElement(header, show, formattedValue, toolTip)
-            }
-        } catch (err) {
-            // Might run out of ram from time to time, since we use it dynamically
-            log(ns, `WARNING: stats.js Caught (and suppressed) an unexpected error in the main loop. Update Skipped:\n` +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
-        }
-        await ns.sleep(1000);
-    }
-}
-
 function formatSixSigFigs(value, minDecimalPlaces = 0, maxDecimalPlaces = 0) {
     return value >= 1E7 ? formatNumberShort(value, 6, 3) :
         value.toLocaleString(undefined, { minimumFractionDigits: minDecimalPlaces, maximumFractionDigits: maxDecimalPlaces });
@@ -384,6 +348,14 @@ async function getGangInfo(ns) {
     return await getNsDataThroughFile(ns, 'ns.gang.inGang() ? ns.gang.getGangInformation() : false', '/Temp/gang-stats.txt')
 }
 
+/** Retrieves the last faction manager output file, parses, and types it.
+ * @param {NS} ns 
+ * @returns {{ affordable_nf_count: number, affordable_augs: [string], owned_count: number, unowned_count: number, total_rep_cost: number, total_aug_cost: number }}
+ */
+function getFactionManagerOutput(ns) {
+	const facmanOutput = ns.read(factionManagerOutputFile)
+	return !facmanOutput ? null : JSON.parse(facmanOutput)
+}
 /** @param {NS} ns 
  * @returns {Promise<Server[]>} **/
 async function getAllServersInfo(ns) {
