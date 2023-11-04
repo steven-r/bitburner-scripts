@@ -331,6 +331,7 @@ export async function main(ns) {
             args: () => ['--reserve-percent', Math.min(0.9, 0.1 * Object.values(dictSourceFiles).reduce((t, v) => t + v, 0)), '--absolute-reserve', reservedMoney(ns), '--utilization-trigger', '0'],
             shouldRun: () => {
                 if (!shouldImproveHacking()) return false; // Skip if hack income is not important in this BN or at this time
+                if (!reqRam(32)) return false;
                 let utilization = getTotalNetworkUtilization(); // Utilization-based heuristics for when we likely could use more RAM for hacking
                 return utilization >= maxUtilization || utilization > 0.80 && maxTargets < 20 || utilization > 0.50 && maxTargets < 5;
             }
