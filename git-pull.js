@@ -8,6 +8,7 @@ const argsSchema = [
     ['subfolder', ''], // Can be set to download to a sub-folder that is not part of the remote repository structure
     ['extension', ['.js', '.ns', '.txt', '.script']], // Files to download by extension
     ['omit-folder', ['Temp/']], // Folders to omit when getting a list of files to update (TODO: This may be obsolete now that we get a list of files from github itself.)
+    ['check', false],// if set, check only for changed files (diff to remote)
 ];
 
 export function autocomplete(data, args) {
@@ -25,6 +26,8 @@ export function autocomplete(data, args) {
  * - Ensuring you have no local changes that you don't mind getting overwritten **/
 export async function main(ns) {
     options = ns.flags(argsSchema);
+    const do_check = options['check'] !== false;
+    
     // Once upon a time, the game API required folders to have a leading slash
     // As of 2.3.1, not only is this no longer needed, but it can break the game.
     if (options.subfolder)
@@ -34,14 +37,27 @@ export async function main(ns) {
     for (const localFilePath of filesToDownload) {
         let fullLocalFilePath = pathJoin(options.subfolder, localFilePath);
         const remoteFilePath = `https://` + pathJoin(baseUrl, localFilePath);
-        ns.print(`Trying to update "${fullLocalFilePath}" from ${remoteFilePath} ...`);
-        if (await ns.wget(`${remoteFilePath}?ts=${new Date().getTime()}`, fullLocalFilePath) && rewriteFileForSubfolder(ns, fullLocalFilePath))
-            ns.tprint(`SUCCESS: Updated "${fullLocalFilePath}" to the latest from ${remoteFilePath}`);
-        else
-            ns.tprint(`WARNING: "${fullLocalFilePath}" was not updated. (Currently running, or not located at ${remoteFilePath}?)`)
+        const ts = Date.now();
+        if (do_check) {
+          ns.print(`Trying to check for diffs in  "${fullLocalFilePath}" from ${remoteFilePath} ...`);
+          const tempFilePath = fullLocalFilePath + ".diff.txt"
+          if (await ns.wget(`${remoteFilePath}?ts=${ts}`, tempFilePath) && await rewriteFileForSubfolder(ns, tempFilePath)) {
+              const oldFile = ns.read(fullLocalFilePath)
+              const newFile = ns.read(tempFilePath)
+              if (oldFile != newFile) {
+                ns.tprint(`WARN: File "${localFilePath}" differs from remote original`);
+              }
+          }
+          ns.rm(tempFilePath);
+        } else {
+          ns.print(`Trying to update "${fullLocalFilePath}" from ${remoteFilePath} ...`);
+          if (await ns.wget(`${remoteFilePath}?ts=${ts}`, fullLocalFilePath) && rewriteFileForSubfolder(ns, fullLocalFilePath))
+              ns.tprint(`SUCCESS: Updated "${fullLocalFilePath}" to the latest from ${remoteFilePath}`);
+          else
+              ns.tprint(`WARNING: "${fullLocalFilePath}" was not updated. (Currently running, or not located at ${remoteFilePath}?)`)
+        }
     }
-    ns.tprint(`INFO: Pull complete. If you have any questions or issues, head over to the Bitburner #alains-scripts Discord channel: ` +
-        `https://discord.com/channels/415207508303544321/935667531111342200`);
+    ns.tprint(`INFO: Pull complete.`);
     // Remove any temp files / scripts from the prior version
     ns.run(pathJoin(options.subfolder, `cleanup.js`));
 }
