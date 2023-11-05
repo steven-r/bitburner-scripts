@@ -51,8 +51,8 @@ function getServerType(srv) {
  * @param {NS} ns 
  * @returns {Promise<Server[]>} **/
 async function getAllServersInfo(ns) {
-    const serverNames = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/scanAllServers.txt');
-    return await getNsDataThroughFile(ns, 'ns.args.map(ns.getServer.bind(ns))', '/Temp/getServers.txt', serverNames);
+    const serverNames = await getNsDataThroughFile(ns, 'scanAllServers(ns)', '/Temp/memDump.scanAllServers.txt');
+    return await getNsDataThroughFile(ns, 'ns.args.map(ns.getServer.bind(ns))', '/Temp/memDump.getServers.txt', serverNames);
 }
 
 /** 
