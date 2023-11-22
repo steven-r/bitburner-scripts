@@ -564,7 +564,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
     let anyStatsDeficient = (p) => p.skills.strength < reqStats || p.skills.defense < reqStats ||
         /*                      */ p.skills.dexterity < reqStats || p.skills.agility < reqStats;
-    let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
+    let crime, lastCrime = undefined, crimeTime, lastStatusUpdateTime, needStats;
     while (forever || (needStats = anyStatsDeficient(player)) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
@@ -577,7 +577,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let crimeType = currentWork.crimeType;
         if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
             if (lastCrime) {
-                log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
+                log(ns, `Committing Crime "${lastCrime}" interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function

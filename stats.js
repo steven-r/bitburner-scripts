@@ -266,7 +266,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
             const servers = await getAllServersInfo(ns);
             const rooted = servers.filter(s => s.hasAdminRights).length;
             const purchased = servers.filter(s => s.hostname != "home" && s.purchasedByPlayer).length; // "home" counts as purchased by the game
-            const likelyHacknet = servers.filter(s => s.hostname.startsWith("hacknet-node-"));
+            const likelyHacknet = servers.filter(s => s.hostname.startsWith("hacknet-"));
             // Add Server count.
             val1.push(true, `${servers.length}/${rooted}/${purchased}`, `The number of servers on the network (${servers.length}) / ` +
                 `number rooted (${rooted}) / number purchased ` + (likelyHacknet.length > 0 ?
