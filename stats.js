@@ -16,6 +16,7 @@ export function autocomplete(data, _args) {
 
 const factionManagerOutputFile = "/Temp/affordable-augs.txt"; // Temp file produced by faction manager with status information
 const currentWorkFile = '/Temp/current-work.txt'; // Temp file produced by work-for-faction.js
+const daemonStatsFile = '/Temp/_stats-daemon.txt'; // Temp file produced by daemon.js
 let doc, hook0, hook1;
 let playerInBladeburner = false, nodeMap = {}
 
@@ -303,6 +304,19 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
                 "Uses RAM to boost faction reputation gain rate while working for factions (capped at 1.5) " +
                 "\nRun `daemon.js` with the `--no-share` flag to disable.");
         } else val.push(false)
+        hudData.push(val)
+    }
+
+    {
+        const val = ["Tgts/Prep/Skp"];
+        const dStatsString = ns.read(daemonStatsFile);
+        if (dStatsString !== '') {
+            const dStats = JSON.parse(dStatsString);
+            val.push(true, ns.formatNumber(dStats.targeting.length, 0) + "/" + 
+            ns.formatNumber(dStats.prepping.length + dStats.cantHackButPrepping.length, 0) + "/" +
+            ns.formatNumber(dStats.skipped.length, 0),
+                "Servers being processed by daemon");
+        } else val.push(false);
         hudData.push(val)
     }
 

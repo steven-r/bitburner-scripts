@@ -775,6 +775,21 @@ async function doTargetingLoop(ns) {
             } //else log(ns, `Not Sharing. workCapped: ${isWorkCapped()} utilizationPercent: ${utilizationPercent} maxShareUtilization: ${maxShareUtilization} cooldown: ${formatDuration(Date.now() - lastShareTime)} networkRam: ${network.totalMaxRam}`);
 
             // Log some status updates
+            let stats = {
+                "hosts": allHostNames,
+                "ignored": noMoney.map((s) => s.name),
+                "notRootet": notRooted.map((s) => s.name),
+                "cracksMissing": crackNames.filter(c => !ownedCracks.includes(c)),
+                "cantHack": cantHack.map((s, _i) => s.name),
+                "lowestUnhackable": lowestUnhackable,
+                "cantHackButPrepped": cantHackButPrepping.map((s) => s.name),
+                "preppedButNotTargeting": preppedButNotTargeting.map((s) => s.name),
+                "skipped": skipped.map((s) => s.name),
+                "failed": failed.map((s) => s.name),
+                "targeting": targeting.map((s) => s.name),
+                "prepping": prepping.map((s) => s.name),
+                "lastUpdateTime": 0
+            };
             let keyUpdates = `Of ${allHostNames.length} total servers:\n > ${noMoney.length} were ignored (owned or no money)`;
             if (notRooted.length > 0 || ownedCracks.length < 5)
                 keyUpdates += `, ${notRooted.length} are not rooted (missing ${crackNames.filter(c => !ownedCracks.includes(c)).join(', ')})`;
@@ -796,6 +811,8 @@ async function doTargetingLoop(ns) {
                     '\n > RAM Utilization: ' + ns.formatRam(Math.ceil(network.totalUsedRam)) + ' of ' + ns.formatRam(network.totalMaxRam) + ' (' + (utilizationPercent * 100).toFixed(1) + '%) ' +
                     `for ${lowUtilizationIterations || highUtilizationIterations} its, Max Targets: ${maxTargets}, Loop Took: ${Date.now() - start}ms`);
                 lastUpdateTime = Date.now();
+                stats.lastUpdateTime = lastUpdateTime;
+                ns.write("/Temp/_stats-daemon.txt", JSON.stringify(stats), "w");
             }
             //log(ns, 'Prepping: ' + prepping.map(s => s.name).join(', '))
             //log(ns, 'targeting: ' + targeting.map(s => s.name).join(', '))
