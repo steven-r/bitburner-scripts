@@ -102,7 +102,8 @@ export async function main(ns) {
             server.name,
             ns.formatRam(server.maxRam), 
             ns.formatRam(server.ramUsed),
-            ns.formatPercent(server.ramUsed / server.maxRam)
+            ns.formatPercent(server.ramUsed / server.maxRam),
+            getServerType(server.name)
         ]);
         //const stats = getStats(ns, memServers);
         const emptyLen = emptyServers.length;
@@ -113,9 +114,10 @@ export async function main(ns) {
         }
         const columns = [
             { header: 'Host', width: 20 },
-            { header: 'Ram', width: 10, pad: 1, align: ALIGN_RIGHT},
-            { header: 'Used', width: 10, pad: 1, align: ALIGN_RIGHT},
-            { header: '%', width: 10, pad: 1, align: ALIGN_RIGHT},
+            { header: 'Ram', width: 10, pad: 1, align: ALIGN_RIGHT },
+            { header: 'Used', width: 10, pad: 1, align: ALIGN_RIGHT },
+            { header: '%', width: 10, pad: 1, align: ALIGN_RIGHT },
+            { header: 'type', width: 10, pad: 1, align: ALIGN_RIGHT }
         ];
         const [totalMax, totalUsed] = memServers.reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
         data.push("---"); // seperator
@@ -123,7 +125,8 @@ export async function main(ns) {
             "Total",
             ns.formatRam(totalMax), 
             ns.formatRam(totalUsed),
-            ns.formatPercent(totalUsed / totalMax)
+            ns.formatPercent(totalUsed / totalMax),
+            '---'
         ]);
 
         PrintTable(ns, data, columns, DefaultStyle(), ColorPrint);
