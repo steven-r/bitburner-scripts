@@ -534,10 +534,10 @@ async function exec(ns, script, host, numThreads, ...args) {
     // Try to run the script with auto-retry if it fails to start
     // It doesn't make sense to auto-retry hack tools, only add error handling to other scripts
     if (hackTools.some(h => h.name === script))
-        return ns.exec(script, host, numThreads, ...args);
+        return ns.exec(script, host, { preventDuplicates: true, threads: numThreads }, ...args);
     // Otherwise, run with auto-retry to handle e.g. temporary ram issues
     const pid = await autoRetry(ns, async () => {
-        const p = ns.exec(script, host, numThreads, ...args)
+        const p = ns.exec(script, host, { preventDuplicates: true, threads: numThreads }, ...args)
         return p;
     }, p => p !== 0, () => new Error(`Failed to exec ${script} on ${host} with ${numThreads} threads. ` +
         `This is likely due to having insufficient RAM. Args were: [${args}]`),
