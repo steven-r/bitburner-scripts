@@ -118,6 +118,9 @@ export async function main(ns) {
     bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`)).currentNode;
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
+    if (ownedSourceFiles == null || effectiveSourceFiles == null)
+        return log(ns, `WARNING: Cannot retrieve source file status (maybe due to missing RAM). Please try again`, true, 'warning');
+
     const sf4Level = bitNode == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
     if (sf4Level == 0)
         return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'error');
