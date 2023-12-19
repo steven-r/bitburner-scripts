@@ -532,10 +532,12 @@ async function earnFactionInvite(ns, factionName) {
 }
 
 /** @param {NS} ns */
-async function goToCity(ns, cityName) {
+async function goToCity(ns, cityName, showNote = true) {
     const player = await getPlayerInfo(ns);
     if (player.city == cityName) {
-        ns.print(`Already in city ${cityName}`);
+        if (showNote) {
+            ns.print(`Already in city ${cityName}`);
+        }
         return true;
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, null, [cityName])) {
@@ -617,7 +619,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 
 /** @param {NS} ns */
 async function studyForCharisma(ns, focus) {
-    await goToCity(ns, 'Volhaven');
+    await goToCity(ns, 'Volhaven', false);
     return await study(ns, focus, 'Leadership', 'ZB Institute Of Technology');
 }
 
@@ -1099,7 +1101,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-server hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await trySpendHashes(ns, "Improve Studying");
                 if (spentHashes > 0) {
-                    log(ns, 'Bought a "Improve Studying" upgrade.', false, 'success');
+                    log(ns, 'Bought a "Improve Studying" upgrade from hashes.', false, 'success');
                     await studyForCharisma(ns, shouldFocus); // We must restart studying for the upgrade to take effect.
                 }
             }
