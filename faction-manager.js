@@ -720,7 +720,7 @@ async function managePurchaseableAugs(ns, outputRows, accessibleAugs) {
     manageFilteredSubset(ns, outputRows, `(${purchaseableAugs.length - nfPurchased} Augs + ${nfPurchased} NF)`, purchaseableAugs, true, false, false);
     const pa_names = purchaseableAugs.map(a => a.displayName);
     const nextFacs = desiredAugs.filter(a => !pa_names.includes(a.displayName))
-        .map(a => a.getFromJoined() || a.getFromAny)
+        .map(a => a.getFromJoined())
         .filter((value, index, array) => array.indexOf(value) === index); // unique
     ns.write("/Temp/NextSuitableFactionsBasedOnPlan.txt", JSON.stringify(nextFacs), "w");
     if (nextUpAug) outputRows.push(nextUpAug);
