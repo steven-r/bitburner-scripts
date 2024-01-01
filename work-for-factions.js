@@ -43,7 +43,7 @@ const cannotWorkForFactions = ["Church of the Machine God", "Bladeburners", "Sha
 // These factions should ideally be completed in this order
 const preferredEarlyFactionOrder = [
     "Netburners", // Improve hash income, which is useful or critical for almost all BNs
-    "Tian Di Hui", "Aevum", // These give all the company_rep and faction_rep bonuses early game    
+    "Tian Di Hui", "Aevum", "Ishima",// These give all the company_rep and faction_rep bonuses early game    
     "Daedalus", // Once we have all faction_rep boosting augs, there's no reason not to work towards Daedalus as soon as it's available/feasible so we can buy Red Pill
     "CyberSec", /* Quick, and NightSec aug depends on an aug from here */ 
     "NiteSec", "Tetrads", // Cha augs to speed up earning company promotions
@@ -189,28 +189,46 @@ async function loadStartupData(ns) {
     shouldFocus = !options['no-focus'] && hasFocusPenalty; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
     hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
 
-    // Find out if we're in a gang
-    const gangInfo = await getGangInfo(ns);
-    playerGang = gangInfo ? gangInfo.faction : null;
-    if (playerGang && !options['disable-treating-gang-as-sole-provider-of-its-augs']) {
-        // Whatever augmentations the gang provides are so easy to get from them, might as well ignore any other factions that have them.
+    let facmanAugsStr = ns.read("/Temp/DesiredAugs.txt");
+
+    if (facmanAugsStr.length == 0) {
+      // Find out if we're in a gang
+      const gangInfo = await getGangInfo(ns);
+      playerGang = gangInfo ? gangInfo.faction : null;
+      if (playerGang && !options['disable-treating-gang-as-sole-provider-of-its-augs']) {
+          // Whatever augmentations the gang provides are so easy to get from them, might as well ignore any other factions that have them.
         const gangAugs = dictFactionAugs[playerGang];
         ns.print(`Your gang ${playerGang} provides easy access to ${gangAugs.length} augs. Ignoring these augs from the original factions that provide them.`);
         for (const faction of allKnownFactions.filter(f => f != playerGang))
             dictFactionAugs[faction] = dictFactionAugs[faction].filter(a => !gangAugs.includes(a));
-    }
+      }
 
-    mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+      mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
         dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug))
             .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-    //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-    // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-    mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+      //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
+      // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
+      mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
         dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug) && (
             Object.keys(dictAugStats[aug]).length == 0 || options['desired-stats'].length == 0 ||
             Object.keys(dictAugStats[aug]).some(key => options['desired-stats'].some(stat => key.includes(stat)))
         )).reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
     //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
+    } else {
+        let facmanAugs = {};
+        const obj = JSON.parse(facmanAugsStr);
+        for (let i in obj) {
+          let prev = facmanAugs[obj[i].faction] || [];
+          facmanAugs[obj[i].faction] = [...prev, obj[i]];
+        }
+        //ns.print("facmanAugs: " + JSON.stringify(facmanAugs));
+        mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+          facmanAugs[f] ? facmanAugs[f].reduce((max, aug) => Math.max(max, aug.reputation), -1) : -1]));
+        //ns.print("DEBUG: Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
+        // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
+        mostExpensiveDesiredAugByFaction = mostExpensiveAugByFaction;
+        //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
+    }
 
     // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
     // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
@@ -281,11 +299,9 @@ async function mainLoop(ns) {
     }
 
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
-    const facmanSuggestionsStr = ns.read("/Temp/NextSuitableFactionsBasedOnPlan.txt");
-    const facmanSuggestions = facmanSuggestionsStr.length > 0 ? JSON.parse(facmanSuggestionsStr) : [];
     let priorityFactions = options['crime-focus'] 
         ? preferredCrimeFactionOrder.slice()
-        : [].concat(facmanSuggestions, preferredEarlyFactionOrder.slice());
+        : preferredEarlyFactionOrder.slice();
     if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
         priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
         ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
@@ -788,6 +804,7 @@ let lastFactionWorkStatus = "";
  * */
 export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = undefined) {
     const repToFavour = (rep) => Math.ceil(25500 * 1.02 ** (rep - 1) - 25000);
+    //ns.print(`DEBUG: ${factionName}: mostExpensive: ${mostExpensiveAugByFaction[factionName]}, desired: ${mostExpensiveDesiredAugByFaction[factionName]}`)
     let highestRepAug = forceBestAug ? mostExpensiveAugByFaction[factionName] : mostExpensiveDesiredAugByFaction[factionName];
     let startingFavor = dictFactionFavors[factionName] || 0;
     let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));

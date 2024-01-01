@@ -118,9 +118,9 @@ export async function main(ns) {
     bitNode = (await getNsDataThroughFile(ns, `ns.getResetInfo()`)).currentNode;
     const ownedSourceFiles = await getActiveSourceFiles(ns, false);
     effectiveSourceFiles = await getActiveSourceFiles(ns, true);
-    if (ownedSourceFiles == null || effectiveSourceFiles == null)
-        return log(ns, `WARNING: Cannot retrieve source file status (maybe due to missing RAM). Please try again`, true, 'warning');
-
+    if (ownedSourceFiles === null || effectiveSourceFiles === null) {
+        return log(ns, `WARNING: Probably due to missing RAM source file status could not be retrieved.`, true, 'warning');
+    }
     const sf4Level = bitNode == 4 ? 3 : ownedSourceFiles[4] || 0; // If in BN4, singularity costs are as though you had SF4.3
     if (sf4Level == 0)
         return log(ns, `ERROR: This script requires SF4 (singularity) functions to work.`, true, 'error');
@@ -191,7 +191,7 @@ export async function main(ns) {
             `prevent you from doing so for the rest of this BN. (Run with '--ignore-stanek' to bypass this warning.)`, true);
     else if (options.purchase && purchaseableAugs) {
         await purchaseDesiredAugs(ns);
-        await ns.write(output_file, "", "w"); // Clear the file so it isn't misinterpreted on next reset.
+        await ns.write(output_file, "{}", "w"); // Clear the file so it isn't misinterpreted on next reset.
     } else if (!ignorePlayerData) // Write a temp file that summarizes what augs we could afford if we could ascend right now.
         await ns.write(output_file, JSON.stringify({
             affordable_nf_count: purchaseableAugs.filter(a => a.name == strNF).length,
@@ -491,6 +491,17 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
             desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs);
             augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep);
         }
+        let workingAugs = desiredAugs.map((v) => {
+          let res = {
+            canUse: v.prereqs.length == 0,
+            faction: v.getFromJoined(),
+            name: v.name,
+            reputation: v.reputation,
+            price: v.price
+          };
+          return res;
+          }).filter((x) => x.canUse).reverse();
+        ns.write('/Temp/DesiredAugs.txt', JSON.stringify(workingAugs, null, 2), "w");
         let accessibleAugs = await manageFilteredSubset(ns, outputRows, 'Desired Within Rep', augsWithRep.filter(aug => aug.desired));
         await managePurchaseableAugs(ns, outputRows, accessibleAugs);
     }
