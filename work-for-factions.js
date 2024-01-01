@@ -532,12 +532,10 @@ async function earnFactionInvite(ns, factionName) {
 }
 
 /** @param {NS} ns */
-async function goToCity(ns, cityName, showNote = true) {
+async function goToCity(ns, cityName) {
     const player = await getPlayerInfo(ns);
     if (player.city == cityName) {
-        if (showNote) {
-            ns.print(`Already in city ${cityName}`);
-        }
+        ns.print(`Already in city ${cityName}`);
         return true;
     }
     if (await getNsDataThroughFile(ns, `ns.singularity.travelToCity(ns.args[0])`, null, [cityName])) {
@@ -566,7 +564,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         `Str: ${player.skills.strength}, Def: ${player.skills.defense}, Dex: ${player.skills.dexterity}, Agi: ${player.skills.agility})`);
     let anyStatsDeficient = (p) => p.skills.strength < reqStats || p.skills.defense < reqStats ||
         /*                      */ p.skills.dexterity < reqStats || p.skills.agility < reqStats;
-    let crime, lastCrime = undefined, crimeTime, lastStatusUpdateTime, needStats;
+    let crime, lastCrime, crimeTime, lastStatusUpdateTime, needStats;
     while (forever || (needStats = anyStatsDeficient(player)) || player.numPeopleKilled < reqKills || -ns.heart.break() < reqKarma) {
         if (!forever && breakToMainLoop()) return ns.print('INFO: Interrupting crime to check on high-level priorities.');
         let crimeChances = await getNsDataThroughFile(ns, `Object.fromEntries(ns.args.map(c => [c, ns.singularity.getCrimeChance(c)]))`, '/Temp/crime-chances.txt', bestCrimesByDifficulty);
@@ -579,7 +577,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
         let crimeType = currentWork.crimeType;
         if (!lastCrime || !(crimeType && crimeType.toLowerCase().includes(lastCrime))) {
             if (lastCrime) {
-                log(ns, `Committing Crime "${lastCrime}" interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
+                log(ns, `Committing Crime "${lastCrime}" Interrupted. (Now: ${crimeType}) Restarting...`, false, 'warning');
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
@@ -619,7 +617,7 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
 
 /** @param {NS} ns */
 async function studyForCharisma(ns, focus) {
-    await goToCity(ns, 'Volhaven', false);
+    await goToCity(ns, 'Volhaven');
     return await study(ns, focus, 'Leadership', 'ZB Institute Of Technology');
 }
 
@@ -1011,7 +1009,7 @@ async function trySpendHashes(ns, spendOn) {
  * @param {NS} ns */
 export async function tryBuyReputation(ns) {
     if (options['no-coding-contracts']) return;
-    if ((await getPlayerInfo(ns)).money > 10E9) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
+    if ((await getPlayerInfo(ns)).money < 1E12) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
         let spentHashes = await trySpendHashes(ns, "Generate Coding Contract");
         if (spentHashes > 0) {
             log(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, false, 'success');
@@ -1101,7 +1099,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
             if (requiredCha - player.skills.charisma > 10) { // Try to spend hacknet-server hashes on university upgrades while we've got a ways to study to make it go faster
                 let spentHashes = await trySpendHashes(ns, "Improve Studying");
                 if (spentHashes > 0) {
-                    log(ns, 'Bought a "Improve Studying" upgrade from hashes.', false, 'success');
+                    log(ns, 'Bought a "Improve Studying" upgrade.', false, 'success');
                     await studyForCharisma(ns, shouldFocus); // We must restart studying for the upgrade to take effect.
                 }
             }
@@ -1160,7 +1158,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                     charisma: requiredCha,
                     reputation: requiredRep
                 },
-                eta: !isWorking ? undefined : 1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate,
+                eta: !isWorking ? -1 : currentReputation >= (requiredRep || repRequiredForFaction) ? -1 : 1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate,
                 companyName,
                 rate: repGainRate,
                 penalty: hasFocusPenalty && !shouldFocus,
