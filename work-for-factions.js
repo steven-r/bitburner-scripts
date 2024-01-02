@@ -86,6 +86,7 @@ let shouldFocus; // Whether we should focus on work or let it be backgrounded (b
 let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
 let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
+let priorityFactions;
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -180,9 +181,6 @@ async function loadStartupData(ns) {
     dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', allKnownFactions);
     const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', allKnownFactions);
     const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
-    const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationRepReq(o)'), '/Temp/getAugmentationRepReqs.txt', augmentationNames);
-    const dictAugStats = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationStats(o)'), '/Temp/getAugmentationStats.txt', augmentationNames);
-    const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
     const installedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
     // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
     hasFocusPenalty = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
@@ -191,44 +189,49 @@ async function loadStartupData(ns) {
 
     let facmanAugsStr = ns.read("/Temp/DesiredAugs.txt");
 
-    if (facmanAugsStr.length == 0) {
-      // Find out if we're in a gang
-      const gangInfo = await getGangInfo(ns);
-      playerGang = gangInfo ? gangInfo.faction : null;
-      if (playerGang && !options['disable-treating-gang-as-sole-provider-of-its-augs']) {
-          // Whatever augmentations the gang provides are so easy to get from them, might as well ignore any other factions that have them.
-        const gangAugs = dictFactionAugs[playerGang];
-        ns.print(`Your gang ${playerGang} provides easy access to ${gangAugs.length} augs. Ignoring these augs from the original factions that provide them.`);
-        for (const faction of allKnownFactions.filter(f => f != playerGang))
-            dictFactionAugs[faction] = dictFactionAugs[faction].filter(a => !gangAugs.includes(a));
-      }
+    // Find out if we're in a gang
+    const gangInfo = await getGangInfo(ns);
+    playerGang = gangInfo ? gangInfo.faction : null;
 
-      mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
-        dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug))
-            .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-      //ns.print("Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-      // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-      mostExpensiveDesiredAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
-        dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug) && (
-            Object.keys(dictAugStats[aug]).length == 0 || options['desired-stats'].length == 0 ||
-            Object.keys(dictAugStats[aug]).some(key => options['desired-stats'].some(stat => key.includes(stat)))
-        )).reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)]));
-    //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
-    } else {
-        let facmanAugs = {};
-        const obj = JSON.parse(facmanAugsStr);
-        for (let i in obj) {
-          let prev = facmanAugs[obj[i].faction] || [];
-          facmanAugs[obj[i].faction] = [...prev, obj[i]];
-        }
-        //ns.print("facmanAugs: " + JSON.stringify(facmanAugs));
-        mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
-          facmanAugs[f] ? facmanAugs[f].reduce((max, aug) => Math.max(max, aug.reputation), -1) : -1]));
-        //ns.print("DEBUG: Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-        // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-        mostExpensiveDesiredAugByFaction = mostExpensiveAugByFaction;
-        //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
+    let facmanAugs = {};
+    const obj = JSON.parse(facmanAugsStr);
+    for (let i in obj) {
+        let prev = facmanAugs[obj[i].faction] || [];
+        facmanAugs[obj[i].faction] = [...prev, obj[i]];
     }
+    //ns.print("facmanAugs: " + JSON.stringify(facmanAugs));
+    mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+        facmanAugs[f] ? facmanAugs[f]
+          .filter(aug => aug.desired && aug.faction !== playerGang)
+          .reduce((max, aug) => Math.max(max, aug.reputation), -1) : -1]));
+
+    if (Object.values(mostExpensiveAugByFaction).filter(x => x > 0).length === 0) {
+      // as there are no desired augs, use all
+      mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+          facmanAugs[f] ? facmanAugs[f]
+            .reduce((max, aug) => Math.max(max, aug.reputation), -1) : -1]));
+    }
+    if (gangInfo && mostExpensiveAugByFaction[playerGang]) {
+        mostExpensiveAugByFaction[playerGang] = -1; // do not handle gang augs
+    }
+
+    if (options['crome-focus']) {
+        priorityFactions = preferredCrimeFactionOrder.slice();
+    } else {
+        // priority is set by lowest order coming from facman
+        priorityFactions = Object.entries(mostExpensiveAugByFaction)
+            .filter(x => x[1] > 0)
+            .sort((a, b) => (a[1] < b[1]))
+            .map((x) => x[0]);
+        if (priorityFactions.length == 0) {
+            priorityFactions = preferredEarlyFactionOrder;
+        }
+    }
+    // ns.print("DEBUG: Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
+    // ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
+    // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
+    mostExpensiveDesiredAugByFaction = mostExpensiveAugByFaction;
+    //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
 
     // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
     // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
@@ -301,13 +304,8 @@ async function mainLoop(ns) {
     }
 
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
-    const facmanSuggestionsStr = "";//ns.read("/Temp/NextSuitableFactionsBasedOnPlan.txt");
-    const facmanSuggestions = facmanSuggestionsStr.length > 0 ? JSON.parse(facmanSuggestionsStr) : [];
-    let priorityFactions = options['crime-focus'] 
-        ? preferredCrimeFactionOrder.slice()
-        : [].concat(facmanSuggestions, preferredEarlyFactionOrder.slice());
-    if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
-        priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
+    if (player.skills.hacking < fulcrummHackReq - 10 && priorityFactions["Fulcrum Secret Technologies"]) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
+        priorityFactions = priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
         ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
     } // TODO: Otherwise, if we get Fulcrum, we have no need for a couple other company factions
 

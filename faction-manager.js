@@ -491,12 +491,13 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
             desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs);
             augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep);
         }
-        let workingAugs = desiredAugs.map((v) => {
+        let workingAugs = augsWithRep.map((v) => {
           let res = {
             canUse: v.prereqs.length == 0,
             faction: v.getFromJoined(),
             name: v.name,
             reputation: v.reputation,
+            desired: v.desired,
             price: v.price
           };
           return res;
