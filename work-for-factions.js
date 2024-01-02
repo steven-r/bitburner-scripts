@@ -268,13 +268,15 @@ async function mainLoop(ns) {
         invites.filter(f => !skipFactions.includes(f) && !softCompletedFactions.includes(f));
     for (const invite of invitesToAccept)
         await tryJoinFaction(ns, invite);
+    
+    // load unconditionally 
+    await loadStartupData(ns);
+
     // Get some information about gangs (if unlocked)
     if (2 in dictSourceFiles) {
         if (!playerGang) { // Check if we've joined a gang since our last iteration
             const gangInfo = await getGangInfo(ns);
             playerGang = gangInfo ? gangInfo.faction : null;
-            // If we've only just now joined a gang, we have to reload startup data, because the augs offered by our gang faction has now changed.
-            if (playerGang) await loadStartupData(ns);
         }
         if (ns.heart.break() <= options['karma-threshold-for-gang-invites']) { // Start trying to earn gang faction invites if we're close to unlocking gangs
             if (!playerGang) {
@@ -299,9 +301,11 @@ async function mainLoop(ns) {
     }
 
     // Remove Fulcrum from our "EarlyFactionOrder" if hack level is insufficient to backdoor their server
+    const facmanSuggestionsStr = "";//ns.read("/Temp/NextSuitableFactionsBasedOnPlan.txt");
+    const facmanSuggestions = facmanSuggestionsStr.length > 0 ? JSON.parse(facmanSuggestionsStr) : [];
     let priorityFactions = options['crime-focus'] 
         ? preferredCrimeFactionOrder.slice()
-        : preferredEarlyFactionOrder.slice();
+        : [].concat(facmanSuggestions, preferredEarlyFactionOrder.slice());
     if (player.skills.hacking < fulcrummHackReq - 10) { // Assume that if we're within 10, we'll get there by the time we've earned the invite
         priorityFactions.splice(priorityFactions.findIndex(c => c == "Fulcrum Secret Technologies"), 1);
         ns.print(`Fulcrum faction server requires ${fulcrummHackReq} hack, so removing from our initial priority list for now.`);
