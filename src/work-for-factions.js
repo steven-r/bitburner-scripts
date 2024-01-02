@@ -315,8 +315,10 @@ async function mainLoop(ns) {
     for (const faction of factionWorkOrder) {
         if (breakToMainLoop()) break; // Only continue on to the next faction if it isn't time for a high-level update.
         let earnedNewFactionInvite = false;
-        if (preferredCompanyFactionOrder.includes(faction)) // If this is a company faction, we need to work for the company first
+        if (preferredCompanyFactionOrder.includes(faction)) {
+            // If this is a company faction, we need to work for the company first
             earnedNewFactionInvite = await workForMegacorpFactionInvite(ns, faction, true);
+        }
         // If new work was done for a company or their faction, restart the main work loop to see if we've since unlocked a higher-priority faction in the list
         if (earnedNewFactionInvite || await workForSingleFaction(ns, faction)) {
             scope--; // De-increment scope so that effecitve scope doesn't increase on the next loop (i.e. it will be incremented back to what it is now)
@@ -1073,7 +1075,10 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
     let backdoored = await checkForBackdoor(ns, companyName);
     let repRequiredForFaction = (companyConfig?.repRequiredForFaction || 400_000) - (backdoored ? 100_000 : 0);
     while (((currentReputation = (await getCompanyReputation(ns, companyName))) < repRequiredForFaction) && !player.factions.includes(factionName)) {
-        if (breakToMainLoop()) return ns.print('INFO: Interrupting corporation work to check on high-level priorities.');
+        if (breakToMainLoop()) {
+            ns.print('INFO: Interrupting corporation work to check on high-level priorities.');
+            return false;
+        }
         // Determine the next promotion we're striving for (the sooner we get promoted, the faster we can earn company rep)
         const getTier = job => Math.min(job.reqRep.filter(r => r <= currentReputation).length, job.reqHack.filter(h => h <= player.skills.hacking).length, job.reqCha.filter(c => c <= player.skills.charisma).length) - 1;
         // It's generally best to hop back-and-forth between it and software engineer career paths (rep gain is about the same, but better money from software)
