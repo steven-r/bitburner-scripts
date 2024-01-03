@@ -313,7 +313,7 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
         if (dStatsString !== '') {
             const dStats = JSON.parse(dStatsString);
             val.push(true, ns.formatNumber(dStats.targeting.length, 0) + "/" + 
-            ns.formatNumber(dStats.prepping.length + dStats.cantHackButPrepping.length, 0) + "/" +
+            ns.formatNumber(dStats.prepping.length + dStats.cantHackButPrepped.length, 0) + "/" +
             ns.formatNumber(dStats.skipped.length, 0),
                 "Servers being processed by daemon");
         } else val.push(false);

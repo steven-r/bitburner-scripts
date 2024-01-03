@@ -142,5 +142,4 @@ dist
 .vscode/*.*
 *.ts
 dist
-.DS_Store
-.DS_Store
+.DS*
