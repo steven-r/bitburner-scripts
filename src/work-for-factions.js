@@ -85,8 +85,8 @@ let shouldFocus; // Whether we should focus on work or let it be backgrounded (b
 // And a bunch of globals because managing state and encapsulation is hard.
 let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
 let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
-let firstFactions, skipFactions, completedFactions, softCompletedFactions, mostExpensiveAugByFaction, mostExpensiveDesiredAugByFaction;
-let priorityFactions;
+let firstFactions, skipFactions, completedFactions;
+let priorityFactions, nextAugsByFaction;
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -146,6 +146,7 @@ export async function main(ns) {
 
     mainLoopStart = Date.now();
     scope = 0;
+
     // eslint-disable-next-line no-constant-condition
     while (true) { // After each loop, we will repeat all prevous work "strategies" to see if anything new has been unlocked, and add one more "strategy" to the queue
         try {
@@ -200,51 +201,48 @@ async function loadStartupData(ns) {
         facmanAugs[obj[i].faction] = [...prev, obj[i]];
     }
     //ns.print("facmanAugs: " + JSON.stringify(facmanAugs));
-    mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+    nextAugsByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
         facmanAugs[f] ? facmanAugs[f]
           .filter(aug => aug.desired && aug.faction !== playerGang)
-          .reduce((max, aug) => Math.max(max, aug.reputation), -1) : -1]));
+          .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER]));
 
-    if (Object.values(mostExpensiveAugByFaction).filter(x => x > 0).length === 0) {
+    if (Object.values(nextAugsByFaction).filter(x => x > 0).length === 0) {
       // as there are no desired augs, use all
-      mostExpensiveAugByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
-          facmanAugs[f] ? facmanAugs[f]
-            .reduce((max, aug) => Math.max(max, aug.reputation), -1) : -1]));
-    }
-    if (gangInfo && mostExpensiveAugByFaction[playerGang]) {
-        mostExpensiveAugByFaction[playerGang] = -1; // do not handle gang augs
+      nextAugsByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+        facmanAugs[f] ? facmanAugs[f]
+          .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER]));
     }
 
-    if (options['crome-focus']) {
+    if (playerGang && nextAugsByFaction[playerGang]) {
+        // ignore player gang, working does not help here
+        nextAugsByFaction[playerGang] = Number.MAX_SAFE_INTEGER;
+    }
+    ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
+
+    if (options['crime-focus']) {
         priorityFactions = preferredCrimeFactionOrder.slice();
     } else {
         // priority is set by lowest order coming from facman
-        priorityFactions = Object.entries(mostExpensiveAugByFaction)
-            .filter(x => x[1] > 0)
-            .sort((a, b) => (a[1] < b[1]))
-            .map((x) => x[0]);
+        const priorityFactionsCount = Object.entries(nextAugsByFaction)
+            .filter(x => x[1] < Number.MAX_SAFE_INTEGER)
+            .sort((a, b) => (a[1] - b[1]));
+        priorityFactions = priorityFactionsCount.map((x) => x[0]);
         if (priorityFactions.length == 0) {
             priorityFactions = preferredEarlyFactionOrder;
         }
+        ns.print("DEBUG: priority Factions/Count: " + JSON.stringify(priorityFactionsCount));
     }
-    // ns.print("DEBUG: Most expensive unowned aug by faction: " + JSON.stringify(mostExpensiveAugByFaction));
-    // ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
-    // TODO: Detect when the most expensive aug from two factions is the same - only need it from the first one. (Update lists and remove 'afforded' augs?)
-    mostExpensiveDesiredAugByFaction = mostExpensiveAugByFaction;
-    //ns.print("Most expensive desired aug by faction: " + JSON.stringify(mostExpensiveDesiredAugByFaction));
+    ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
 
     // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
     // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
     // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
     const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
     // Unless otherwise configured, we will skip factions with no remaining augmentations
-    completedFactions = filterableFactions.filter(fac => mostExpensiveAugByFaction[fac] == -1);
-    softCompletedFactions = filterableFactions.filter(fac => mostExpensiveDesiredAugByFaction[fac] == -1 && !completedFactions.includes(fac));
+    completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] == Number.MAX_SAFE_INTEGER);
     skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
     if (completedFactions.length > 0)
         ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
-    if (softCompletedFactions.length > 0)
-        ns.print(`${softCompletedFactions.length} factions will initially be skipped (all desired augs purchased): ${softCompletedFactions.join(", ")}`);
 
     // TODO: If --prioritize-invites is set, we should have a preferred faction order that puts easiest-invites-to-earn at the front (e.g. all city factions)
     numJoinedFactions = playerInfo.factions.length;
@@ -266,9 +264,7 @@ async function mainLoop(ns) {
     // Immediately accept any outstanding faction invitations for factions we want to earn rep with soon
     // TODO: If check if we would qualify for an invite to any factions just by travelling, and do so to start earning passive rep
     const invites = await checkFactionInvites(ns);
-    const invitesToAccept = options['get-invited-to-every-faction'] || options['prioritize-invites'] ?
-        invites.filter(f => !skipFactions.includes(f)) :
-        invites.filter(f => !skipFactions.includes(f) && !softCompletedFactions.includes(f));
+    const invitesToAccept = invites.filter(f => !skipFactions.includes(f));
     for (const invite of invitesToAccept)
         await tryJoinFaction(ns, invite);
     
@@ -311,7 +307,7 @@ async function mainLoop(ns) {
 
     // Strategy 1: Tackle a consolidated list of desired faction order, interleaving simple factions and megacorporations
     const factionWorkOrder = firstFactions.concat(priorityFactions.filter(f => // Remove factions from our initial "work order" if we've bought all desired augmentations.
-        !firstFactions.includes(f) && !skipFactions.includes(f) && !softCompletedFactions.includes(f)));
+        !firstFactions.includes(f) && !skipFactions.includes(f)));
     for (const faction of factionWorkOrder) {
         if (breakToMainLoop()) break; // Only continue on to the next faction if it isn't time for a high-level update.
         let earnedNewFactionInvite = false;
@@ -344,9 +340,9 @@ async function mainLoop(ns) {
     // Strategies 5+ now work towards getting an invite to *all factions in the game* (sorted by least-expensive final aug (correlated to easiest faction-invite requirement))
     let joinedFactions = player.factions; // In case our hard-coded list of factions is missing anything, merge it with the list of all factions
     let knownFactions = factions.concat(joinedFactions.filter(f => !factions.includes(f)));
-    let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f)).sort((a, b) => mostExpensiveAugByFaction[a] - mostExpensiveAugByFaction[b]);
+    let allIncompleteFactions = knownFactions.filter(f => !skipFactions.includes(f) && !completedFactions.includes(f)).sort((a, b) => nextAugsByFaction[a] - nextAugsByFaction[b]);
     // Strategy 5: For *all factions in the game*, try to earn an invite and work for rep until we can afford the most-expensive *desired* aug (or unlock donations, whichever comes first)
-    for (const faction of allIncompleteFactions.filter(f => !softCompletedFactions.includes(f)))
+    for (const faction of allIncompleteFactions)
         if (!breakToMainLoop()) await workForSingleFaction(ns, faction);
     if (scope <= 5 || breakToMainLoop()) return;
 
@@ -809,12 +805,12 @@ let lastFactionWorkStatus = "";
 export async function workForSingleFaction(ns, factionName, forceUnlockDonations = false, forceBestAug = false, forceRep = undefined) {
     const repToFavour = (rep) => Math.ceil(25500 * 1.02 ** (rep - 1) - 25000);
     //ns.print(`DEBUG: ${factionName}: mostExpensive: ${mostExpensiveAugByFaction[factionName]}, desired: ${mostExpensiveDesiredAugByFaction[factionName]}`)
-    let highestRepAug = forceBestAug ? mostExpensiveAugByFaction[factionName] : mostExpensiveDesiredAugByFaction[factionName];
+    let highestRepAug = nextAugsByFaction[factionName];
     let startingFavor = dictFactionFavors[factionName] || 0;
     let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
     // When to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
     let factionRepRequired = forceRep ? forceRep : forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
-    if (highestRepAug == -1 && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
+    if (highestRepAug == Number.MAX_SAFE_INTEGER && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
         return ns.print(`All "${factionName}" augmentations are owned. Skipping unlocking faction...`);
     // Ensure we get an invite to location-based factions we might want / need
     if (!await earnFactionInvite(ns, factionName))
@@ -823,11 +819,11 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         return ns.print(`Donations already unlocked for "${factionName}". You should buy access to augs. Skipping working for faction...`);
     if (playerGang == factionName) // Cannot work for your own gang faction.
         return ns.print(`"${factionName}" is your gang faction. You can only earn rep in your gang via respect.`);
-    if (forceUnlockDonations && mostExpensiveAugByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
-        ns.print(`The last "${factionName}" aug is only ${mostExpensiveAugByFaction[factionName].toLocaleString('en')} rep, ` +
+    if (forceUnlockDonations && nextAugsByFaction[factionName] < 0.2 * factionRepRequired) { // Special check to avoid pointless donation unlocking
+        ns.print(`The last "${factionName}" aug is only ${nextAugsByFaction[factionName].toLocaleString('en')} rep, ` +
             `not worth grinding ${favorRepRequired.toLocaleString('en')} rep to unlock donations.`);
         forceUnlockDonations = false;
-        factionRepRequired = highestRepAug = mostExpensiveAugByFaction[factionName];
+        factionRepRequired = highestRepAug = nextAugsByFaction[factionName];
     }
 
     let currentReputation = await getFactionReputation(ns, factionName);

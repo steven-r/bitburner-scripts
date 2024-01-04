@@ -481,8 +481,8 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
     // Display available augs. We use the return value to "lock in" the new sort order. If enabled, subsequent tables are displayed if the filtered sort order changes.
     availableAugs = ignorePlayerData ? unavailableAugs : // Note: We omit NF from available augs here because as many as we can afford are added at the end.
         await manageFilteredSubset(ns, outputRows, 'Available', availableAugs.filter(aug => aug.name != strNF), true);
+    let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
     if (countAvailable > 0) {
-        let augsWithRep = availableAugs.filter(aug => aug.canAfford() || (aug.canAffordWithDonation() && !options['disable-donations']));
         desiredAugs = availableAugs.filter(aug => aug.desired);
         if (augsWithRep.length > desiredAugs.length) {
             augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep)
@@ -491,21 +491,21 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
             desiredAugs = await manageFilteredSubset(ns, outputRows, 'Desired', desiredAugs);
             augsWithRep = await manageFilteredSubset(ns, outputRows, 'Within Rep', augsWithRep);
         }
-        let workingAugs = augsWithRep.map((v) => {
-          let res = {
-            canUse: v.prereqs.length == 0,
-            faction: v.getFromJoined(),
-            name: v.name,
-            reputation: v.reputation,
-            desired: v.desired,
-            price: v.price
-          };
-          return res;
-          }).filter((x) => x.canUse).reverse();
-        ns.write('/Temp/DesiredAugs.txt', JSON.stringify(workingAugs, null, 2), "w");
         let accessibleAugs = await manageFilteredSubset(ns, outputRows, 'Desired Within Rep', augsWithRep.filter(aug => aug.desired));
         await managePurchaseableAugs(ns, outputRows, accessibleAugs);
     }
+    let workingAugs = [...augsWithRep, ...desiredAugs].map((v) => {
+        let res = {
+          canUse: v.prereqs.length == 0,
+          faction: v.getFromJoined(),
+          name: v.name,
+          reputation: v.reputation,
+          desired: v.desired,
+          price: v.price
+        };
+        return res;
+        }).filter((x) => x.canUse);
+    ns.write('/Temp/DesiredAugs.txt', JSON.stringify(workingAugs, null, 2), "w");
     // Print all rows of output that were prepped. Keep as many rows in one log as possible to avoid scrolling the history too much
     log(ns, outputRows.join("\n  "), printToTerminal);
     if (purchaseableAugs.length > 0)
