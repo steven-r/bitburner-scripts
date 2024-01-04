@@ -334,7 +334,16 @@ async function getHudData(ns, bitNode, dictSourceFiles, options) {
                 eta.push(true, `${formatDuration(Math.round(currentWork.eta / (60.0 * 1000.0), 0) * 60.0 * 1000.0)}`, '');
                 invite.push(false);
             } else if (currentWork.work === 'invite' && currentWork.eta !== undefined) {
-                invite.push(true, formatDuration(Math.round(currentWork.eta / (60.0 * 1000.0), 0) * 60.0 * 1000.0), '');
+                const etas = currentWork.eta / 1000.0;
+                if (etas > 0) {
+                    if (etas < 60) {
+                        invite.push(true, "< 1m", '');
+                    } else {
+                        invite.push(true, formatDuration(Math.round(currentWork.eta / (60.0 * 1000.0), 0) * 60.0 * 1000.0), '');
+                    }
+                } else {
+                    invite.push(false);
+                }
                 work.push(false);
                 eta.push(false);
             }
