@@ -359,13 +359,14 @@ async function updateAugmentationData(ns, desiredAugs) {
                 ` { ${statKeys.map(prop => shorten(prop) + ': ' + Math.round((this.stats[prop] + Number.EPSILON) * 100) / 100).join(', ')} }`);
             }
             const factionName = this.getFromJoined() || this.getFromAny;
-            const fCreep = Math.max(0, factionName.length - factionColWidth);
+            const factionNameShort = factionName.replace("Incorporated", "Inc.")
+            const fCreep = Math.max(0, factionNameShort.length - factionColWidth);
             const budget = playerData.money + stockValue;
             const augNameShort = this.displayName.length <= (augColWidth - fCreep) ? this.displayName :
                 `${this.displayName.slice(0, Math.ceil(augColWidth / 2 - 3 - fCreep))}...${this.displayName.slice(this.displayName.length - Math.floor(augColWidth / 2))}`;
             return `${this.desired ? '*' : ' '} Price: ${formatMoney(this.price, 4).padEnd(7)} ${this.price <= budget ? '✓' : '✗'}  ` +
                 `Rep: ${formatNumberShort(this.reputation, 4).padEnd(6)} ${this.canAfford() ? '✓' : this.canAffordWithDonation() ? '$' : '✗'}  ` +
-                `Faction: ${factionName.padEnd(factionColWidth)}  Aug: ${augNameShort.padEnd(augColWidth - fCreep)}  ` +
+                `Faction: ${factionNameShort.padEnd(factionColWidth)}  Aug: ${augNameShort.padEnd(augColWidth - fCreep)}  ` +
                 `${statsString.length <= statsColWidth ? statsString : (statsString.substring(0, statsColWidth - 4) + '... }')}`;
         }
     }]));
