@@ -132,6 +132,19 @@ export async function main(ns) {
         log(ns, `WARNING: Singularity functions are much more expensive with lower levels of SF4 (you have SF4.${dictSourceFiles[4]}). ` +
             `You may encounter RAM issues with and have to wait until you have more RAM available to run this script successfully.`, false, 'warning');
 
+    bitnodeMultipliers = await tryGetBitNodeMultipliers(ns) ||
+    {   // BN mults are used to estimate time to train up stats. Default to 1.0 if unknown
+        HackingLevelMultiplier: 1.0,
+        StrengthLevelMultiplier: 1.0,
+        DefenseLevelMultiplier: 1.0,
+        DexterityLevelMultiplier: 1.0,
+        AgilityLevelMultiplier: 1.0,
+        CharismaLevelMultiplier: 1.0,
+        ClassGymExpGain: 1.0,
+        CrimeExpGain: 1.0,
+        FactionWorkRepGain: 1.0,
+    };
+        
     let loadingComplete = false; // In the event of suboptimal RAM conditions, keep trying to start until we succeed
     while (!loadingComplete) {
         try {
@@ -166,22 +179,9 @@ async function loadStartupData(ns) {
     repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     const playerInfo = await getPlayerInfo(ns);
     const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
-    bitnodeMultipliers = await tryGetBitNodeMultipliers(ns) ||
-    {   // BN mults are used to estimate time to train up stats. Default to 1.0 if unknown
-        HackingLevelMultiplier: 1.0,
-        StrengthLevelMultiplier: 1.0,
-        DefenseLevelMultiplier: 1.0,
-        DexterityLevelMultiplier: 1.0,
-        AgilityLevelMultiplier: 1.0,
-        CharismaLevelMultiplier: 1.0,
-        ClassGymExpGain: 1.0,
-        CrimeExpGain: 1.0,
-    };
 
     // Get some faction and augmentation information to decide what remains to be purchased
     dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', allKnownFactions);
-    const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', allKnownFactions);
-    const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
     const installedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
     // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
     hasFocusPenalty = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
@@ -203,7 +203,7 @@ async function loadStartupData(ns) {
     //ns.print("facmanAugs: " + JSON.stringify(facmanAugs));
     nextAugsByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
         facmanAugs[f] ? facmanAugs[f]
-          .filter(aug => aug.desired && aug.faction !== playerGang)
+          .filter(aug => aug.desired)
           .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER]));
 
     if (Object.values(nextAugsByFaction).filter(x => x > 0).length === 0) {
@@ -217,6 +217,11 @@ async function loadStartupData(ns) {
         // ignore player gang, working does not help here
         nextAugsByFaction[playerGang] = Number.MAX_SAFE_INTEGER;
     }
+
+    // remove factions w/o any augs to achieve
+    nextAugsByFaction = Object.fromEntries(
+        Object.entries(nextAugsByFaction).filter(x => x[1] !== Number.MAX_SAFE_INTEGER)
+        );
     ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
 
     if (options['crime-focus']) {
@@ -224,13 +229,12 @@ async function loadStartupData(ns) {
     } else {
         // priority is set by lowest order coming from facman
         const priorityFactionsCount = Object.entries(nextAugsByFaction)
-            .filter(x => x[1] < Number.MAX_SAFE_INTEGER)
             .sort((a, b) => (a[1] - b[1]));
         priorityFactions = priorityFactionsCount.map((x) => x[0]);
         if (priorityFactions.length == 0) {
             priorityFactions = preferredEarlyFactionOrder;
         }
-        ns.print("DEBUG: priority Factions/Count: " + JSON.stringify(priorityFactionsCount));
+        // ns.print("DEBUG: priority Factions/Count: " + JSON.stringify(priorityFactionsCount));
     }
     ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
 
@@ -756,6 +760,13 @@ async function checkFactionInvites(ns) {
     return await getNsDataThroughFile(ns, 'ns.singularity.checkFactionInvitations()');
 }
 
+/**
+ *  @returns {Promise<number>} List of new faction invites
+ **/
+async function getCompanyFavorGain(ns, companyName) {
+    return await getNsDataThroughFile(ns, "ns.singularity.getCompanyFavorGain(ns.args[0])", null, [companyName]);
+}
+
 /** @param {NS} ns
  *  @returns {Promise<GangGenInfo|boolean>} Gang information, if we're in a gang, or False */
 async function getGangInfo(ns) {
@@ -851,7 +862,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
         let factionJob = currentWork.factionWorkType;
         // Detect if faction work was interrupted and log a warning
         if (workAssigned && currentWork.factionName != factionName) {
-            log(ns, `Work for faction ${factionName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
+            log(ns, `INFO: Work for faction ${factionName} was interrupted (Now: ${JSON.stringify(currentWork)}). Restarting...`, false, 'warning');
             workAssigned = false;
             ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep working
         }
@@ -889,7 +900,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
             lastFactionWorkStatus = status;
             lastStatusUpdateTime = Date.now();
             // Measure approximately how quickly we're gaining reputation to give a rough ETA
-            const repGainRate = await measureFactionRepGainRate(ns, factionName);
+            const repGainRate = await measureFactionRepGainRate(ns, factionName, bestFactionJob);
             const eta_milliseconds = 1000 * (factionRepRequired - currentReputation) / repGainRate;
             json_status.current_rep = Math.round(currentReputation);
             json_status.eta = eta_milliseconds;
@@ -930,28 +941,81 @@ async function startWorkForFaction(ns, factionName, work, focus) {
     return await getNsDataThroughFile(ns, `ns.singularity.workForFaction(ns.args[0], ns.args[1], ns.args[2])`, null, [factionName, work, focus])
 }
 
+const CONSTANTS_MaxSkillLevel = 975;
+
+function calculateIntelligenceBonus(intelligence, weight = 1) {
+    return 1 + (weight * Math.pow(intelligence, 0.8)) / 600;
+}
+
+function mult(favor) {
+    let favorMult = 1 + favor / 100;
+    if (isNaN(favorMult)) {
+      favorMult = 1;
+    }
+    return favorMult * bitnodeMultipliers.FactionWorkRepGain;
+}
+
+function CalculateShareMult(power) {
+    const x = 1 + Math.log(power) / 25;
+    if (isNaN(x) || !isFinite(x)) return 1;
+    return x;
+  }
+
 /** Measure our rep gain rate (per second)
  * @param {NS} ns
- * @param {() => Promise<number>} fnSampleReputation - An async function that samples the reputation at a current point in time */
-async function measureRepGainRate(ns, fnSampleReputation) {
-    //return (await getPlayerInfo(ns)).workRepGainRate;
-    // The game no longer provides the rep gain rate for a given work type, so we must measure it
-    const initialReputation = await fnSampleReputation();
-    let nextTickReputation;
-    let start = Date.now();
-    while (initialReputation == (nextTickReputation = await fnSampleReputation()) && Date.now() - start < 450)
-        await ns.sleep(50);
-    return (nextTickReputation - initialReputation) * 5; // Assume this rep gain was for a 200 tick
+ *
+ **/
+async function measureRepGainRate(ns, factionName, worktype = "hacking") {
+    // The game no longer provides the rep gain rate for a given work type, so we must measure it - code copied
+    // from https://github.com/bitburner-official/bitburner-src/blob/0da9d9d3c0d10895227dfe7a9a0a4dad79306c1d/src/PersonObjects/formulas/reputation.ts
+    const p = await getPlayerInfo(ns);
+    const favor = await getCurrentFactionFavour(ns, factionName);
+
+    switch (worktype) {
+        case "hacking":
+            return ((p.skills.hacking + p.skills.intelligence / 3) / CONSTANTS_MaxSkillLevel) *
+                p.mults.faction_rep *
+                calculateIntelligenceBonus(p.skills.intelligence, 1) *
+                mult(favor) *
+                CalculateShareMult();
+        case "security":
+            const t =
+                (0.9 *
+                (p.skills.strength +
+                    p.skills.defense +
+                    p.skills.dexterity +
+                    p.skills.agility +
+                    (p.skills.hacking + p.skills.intelligence) * CalculateShareMult())) /
+                CONSTANTS_MaxSkillLevel /
+                4.5;
+            return t * p.mults.faction_rep * mult(favor) * calculateIntelligenceBonus(p.skills.intelligence, 1);
+        case "field":
+            const t1 =
+                (0.9 *
+                (p.skills.strength +
+                    p.skills.defense +
+                    p.skills.dexterity +
+                    p.skills.agility +
+                    p.skills.charisma +
+                    (p.skills.hacking + p.skills.intelligence) * CalculateShareMult())) /
+                CONSTANTS_MaxSkillLevel /
+                5.5;
+            return t1 * p.mults.faction_rep * mult(favor) * calculateIntelligenceBonus(p.skills.intelligence, 1);
+        default:
+            return 0;
+    }
 }
+
 /** Measure our faction rep gain rate (per second)
  * @param {NS} ns */
-async function measureFactionRepGainRate(ns, factionName) {
-    return await measureRepGainRate(ns, async () => await getFactionReputation(ns, factionName));
+async function measureFactionRepGainRate(ns, factionName, worktype = null) {
+    return await measureRepGainRate(ns, factionName, worktype);
 }
 /** Measure our company rep gain rate (per second)
  * @param {NS} ns */
 async function measureCompanyRepGainRate(ns, companyName) {
-    return await measureRepGainRate(ns, async () => await getCompanyReputation(ns, companyName));
+    const gain = await getCompanyFavorGain(ns, companyName);
+    return gain;
 }
 
 /** Try all work types and see what gives the best rep gain with this faction!
@@ -965,7 +1029,7 @@ async function detectBestFactionWork(ns, factionName) {
             //ns.print(`"${factionName}": "${work}"" work not supported.`);
             continue; // This type of faction work must not be supported
         }
-        const currentRepGainRate = await measureFactionRepGainRate(ns, factionName);
+        const currentRepGainRate = await measureFactionRepGainRate(ns, factionName, work);
 
         //ns.print(`"${factionName}" work ${work} provides ${formatNumberShort(currentRepGainRate)} rep rate`);
         if (currentRepGainRate > bestRepRate) {
