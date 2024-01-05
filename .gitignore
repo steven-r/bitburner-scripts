@@ -140,6 +140,6 @@ dist
 
 *.txt
 .vscode/*.*
-*.ts
 dist
 .DS*
+NetScriptDefinitions.d.ts

@@ -24,8 +24,7 @@
     "watch:local": "node build/watch.js",
     "watch:remote": "bitburner-filesync",
     "watch:init": "node build/init.js",
-    "watch:all1": "concurrently npm:watch:transpile npm:watch:local npm:watch:remote",
-    "watch:all": "concurrently npm:watch:local npm:watch:remote",
+    "watch:all": "concurrently npm:watch:transpile npm:watch:local npm:watch:remote",
     "watch": "npm run watch:init && npm run watch:all"
   },
   "author": "Stephen Reindl",
