@@ -57,6 +57,7 @@ async function getAllServersInfo(ns: NS): Promise<Server[]> {
 }
 
 interface MemServer extends Server {
+    order: number;
     type: string;
 }
 /** 
@@ -74,6 +75,12 @@ async function getServerList(ns: NS): Promise<MemServer[]> {
         if (show.includes(type)) {
             const ms: MemServer = server as MemServer;
             ms.type = type;
+            let m = ms.hostname.match(/-(\d+)$/);
+            if (m) {
+                ms.order = Number.parseInt(m[1]);
+            } else {
+                ms.order = -1;
+            }
             memServers.push(ms);
         }
     });
@@ -97,9 +104,9 @@ export async function main(ns: NS) {
         const memServers = await getServerList(ns);
         const data: (string|string[])[] = memServers
             .sort((a, b) => {
-                const _a = a.hostname, _b = b.hostname;
+                const _a = a.type, _b = b.type;
                 if (_a < _b) return -1;
-                else if (_a == _b) return 0;
+                else if (_a == _b) return a.order - b.order;
                 return 1;
             })
             .map(server => [
