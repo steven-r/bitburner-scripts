@@ -90,8 +90,7 @@ let shouldFocus; // Whether we should focus on work or let it be backgrounded (b
 // And a bunch of globals because managing state and encapsulation is hard.
 let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
 let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
-let firstFactions, skipFactions, completedFactions;
-let priorityFactions, nextAugsByFaction;
+let firstFactions, skipFactions, completedFactions, priorityFactions, nextAugsByFaction;
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
@@ -192,63 +191,56 @@ async function loadStartupData(ns) {
     hasFocusPenalty = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
     shouldFocus = !options['no-focus'] && hasFocusPenalty; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
     hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
-
-    let facmanAugsStr = ns.read("/Temp/DesiredAugs.txt");
-
     // Find out if we're in a gang
     const gangInfo = await getGangInfo(ns);
     playerGang = gangInfo ? gangInfo.faction : null;
 
-    let facmanAugs = {};
-    const obj = JSON.parse(facmanAugsStr);
-    for (let i in obj) {
-        let prev = facmanAugs[obj[i].faction] || [];
-        facmanAugs[obj[i].faction] = [...prev, obj[i]];
-    }
-    //ns.print("facmanAugs: " + JSON.stringify(facmanAugs));
-    nextAugsByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
-        facmanAugs[f] ? facmanAugs[f]
-          .filter(aug => aug.desired)
-          .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER]));
-
-    if (Object.values(nextAugsByFaction).filter(x => x > 0).length === 0) {
-      // as there are no desired augs, use all
-      nextAugsByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
-        facmanAugs[f] ? facmanAugs[f]
-          .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER]));
+    // load data from facman (if available)
+    let facmanAugsStr = ns.read("/Temp/DesiredAugs.txt");
+    if (facmanAugsStr == "") {
+        facmanAugsStr = []; // empty array
     }
 
-    if (playerGang && nextAugsByFaction[playerGang]) {
-        // ignore player gang, working does not help here
-        nextAugsByFaction[playerGang] = Number.MAX_SAFE_INTEGER;
+    const facmanAugs = JSON.parse(facmanAugsStr);
+    let nextAugs = facmanAugs.filter(x => x.desired);
+    if (playerGang) {
+        nextAugs = nextAugs.filter(x => x.faction !== playerGang);
+    }
+    //ns.print("nextAugs: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
+
+    if (nextAugs.length == 0) {
+        // include non-desired augs as well
+        nextAugs = facmanAugs;
+        if (playerGang) { // and remove gang augs again
+            nextAugs = nextAugs.filter(x => x.faction !== playerGang);
+        }
+        //ns.print("nextAugs2: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
     }
 
-    // remove factions w/o any augs to achieve
-    nextAugsByFaction = Object.fromEntries(
-        Object.entries(nextAugsByFaction).filter(x => x[1] !== Number.MAX_SAFE_INTEGER)
-        );
-    ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
+    nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
+        nextAugs
+        .filter(f => f.faction == a.faction)
+        .reduce((max, aug) => Math.max(max, aug.reputation), -1)]));
+
+    //ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
 
     if (options['crime-focus']) {
         priorityFactions = preferredCrimeFactionOrder.slice();
     } else {
-        // priority is set by lowest order coming from facman
-        const priorityFactionsCount = Object.entries(nextAugsByFaction)
-            .sort((a, b) => (a[1] - b[1]));
-        priorityFactions = priorityFactionsCount.map((x) => x[0]);
+        // keep order from facman
+        priorityFactions = Object.entries(nextAugsByFaction).map((x) => x[0]);
         if (priorityFactions.length == 0) {
             priorityFactions = preferredEarlyFactionOrder;
         }
-        // ns.print("DEBUG: priority Factions/Count: " + JSON.stringify(priorityFactionsCount));
     }
-    ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
+    //ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
 
     // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
     // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
     // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
     const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
     // Unless otherwise configured, we will skip factions with no remaining augmentations
-    completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] == Number.MAX_SAFE_INTEGER);
+    completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] == -1);
     skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
     if (completedFactions.length > 0)
         ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
@@ -826,7 +818,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
     // When to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
     let factionRepRequired = forceRep ? forceRep : forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
-    if (highestRepAug == Number.MAX_SAFE_INTEGER && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
+    if (highestRepAug == -1 && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
         return ns.print(`All "${factionName}" augmentations are owned. Skipping unlocking faction...`);
     // Ensure we get an invite to location-based factions we might want / need
     if (!await earnFactionInvite(ns, factionName))
