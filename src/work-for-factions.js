@@ -28,6 +28,7 @@ const argsSchema = [
     ['karma-threshold-for-gang-invites', -40000], // Prioritize working for gang invites once we have this much negative Karma
     ['disable-treating-gang-as-sole-provider-of-its-augs', false], // Set to true if you still want to grind for rep with factions that only have augs your gang provides
     ['no-bladeburner-check', false], // By default, will avoid working if bladeburner is active and "The Blade's Simulacrum" isn't installed
+    ['gain-strategy', 'fast'], // Either use the fastest or the longest path to gain reputation
 ];
 
 const companySpecificConfigs = [
@@ -91,17 +92,26 @@ let shouldFocus; // Whether we should focus on work or let it be backgrounded (b
 let hasFocusPenalty, hasSimulacrum, repToDonate, fulcrummHackReq, notifiedAboutDaedalus, playerInBladeburner;
 let bitnodeMultipliers, dictSourceFiles, dictFactionFavors, playerGang, mainLoopStart, scope, numJoinedFactions, lastTravel, crimeCount;
 let firstFactions, skipFactions, completedFactions, priorityFactions, nextAugsByFaction;
+let gainStrategy, gainLimit;
+let breakRequired = true;
 
 export function autocomplete(data, args) {
     data.flags(argsSchema);
     const lastFlag = args.length > 1 ? args[args.length - 2] : null;
     if (lastFlag == "--first" || lastFlag == "--skip")
         return factions.map(f => f.replaceAll(' ', '_')).sort();
+    if (lastFlag == '--gain-strategy') {
+        return ['fast', 'most'];
+    }
     return [];
 }
 
 // Bit of an ugly afterthought, but this is all over the place to break out of whatever we're doing and return to the main loop.
-const breakToMainLoop = () => Date.now() > mainLoopStart + checkForNewPrioritiesInterval;
+const breakToMainLoop = () => {
+    const res = breakRequired || Date.now() > mainLoopStart + checkForNewPrioritiesInterval;
+    breakRequired = false;
+    return res;
+}
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -113,7 +123,7 @@ export async function main(ns) {
     // Reset globals whose value can persist between script restarts in weird situations
     lastTravel = crimeCount = 0;
     notifiedAboutDaedalus = playerInBladeburner = false;
-
+    gainStrategy = options['gain-strategy'];
     // Process configuration options
     firstFactions = (options['first'] || []).map(f => f.replaceAll('_', ' ')); // Factions that end up in this list will be prioritized and joined regardless of their augmentations available.
     options.skip = (options.skip || []).map(f => f.replaceAll('_', ' '));
@@ -178,8 +188,17 @@ export async function main(ns) {
     }
 }
 
+let lastFacmanAugData = [];
+/** @param {any[]} newData  */
+const facmanAugDataChanged = (newData) => 
+    lastFacmanAugData.length != newData.length ||
+        newData.some((aug, i) => aug.name != newData[i].name 
+                        || aug.faction != newData[i].faction
+                        || aug.desired != newData[i].desired);
+
 /** @param {NS} ns */
 async function loadStartupData(ns) {
+    breakRequired = false;
     repToDonate = await getNsDataThroughFile(ns, 'ns.getFavorToDonate()');
     const playerInfo = await getPlayerInfo(ns);
     const allKnownFactions = factions.concat(playerInfo.factions.filter(f => !factions.includes(f)));
@@ -198,54 +217,70 @@ async function loadStartupData(ns) {
     // load data from facman (if available)
     let facmanAugsStr = ns.read("/Temp/DesiredAugs.txt");
     if (facmanAugsStr == "") {
-        facmanAugsStr = []; // empty array
+        facmanAugsStr = "[]"; // empty array
     }
 
     const facmanAugs = JSON.parse(facmanAugsStr);
-    let nextAugs = facmanAugs.filter(x => x.desired);
-    if (playerGang) {
-        nextAugs = nextAugs.filter(x => x.faction !== playerGang);
-    }
-    //ns.print("nextAugs: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
-
-    if (nextAugs.length == 0) {
-        // include non-desired augs as well
-        nextAugs = facmanAugs;
-        if (playerGang) { // and remove gang augs again
+    if (facmanAugDataChanged(facmanAugs)) {
+        breakRequired = true;
+        lastFacmanAugData = facmanAugs;
+        ns.print("INFO: faction-manager.js reported a new order of augmentations to process");
+        let nextAugs = facmanAugs.filter(x => x.desired);
+        if (playerGang) {
             nextAugs = nextAugs.filter(x => x.faction !== playerGang);
         }
-        //ns.print("nextAugs2: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
-    }
+        //ns.print("nextAugs: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
 
-    nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
-        nextAugs
-        .filter(f => f.faction == a.faction)
-        .reduce((max, aug) => Math.max(max, aug.reputation), -1)]));
-
-    //ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
-
-    if (options['crime-focus']) {
-        priorityFactions = preferredCrimeFactionOrder.slice();
-    } else {
-        // keep order from facman
-        priorityFactions = Object.entries(nextAugsByFaction).map((x) => x[0]);
-        if (priorityFactions.length == 0) {
-            priorityFactions = preferredEarlyFactionOrder;
+        if (nextAugs.length == 0) {
+            // include non-desired augs as well
+            nextAugs = facmanAugs;
+            if (playerGang) { // and remove gang augs again
+                nextAugs = nextAugs.filter(x => x.faction !== playerGang);
+            }
+            //ns.print("nextAugs2: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
         }
+
+        if (gainStrategy == 'fast') {
+            nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
+                nextAugs
+                .filter(f => f.faction == a.faction)
+                .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER)]));
+            gainLimit = Number.MAX_SAFE_INTEGER;
+        } else {
+            // mpst
+            nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
+                nextAugs
+                .filter(f => f.faction == a.faction)
+                .reduce((max, aug) => Math.max(max, aug.reputation), -1)]));
+            gainLimit = -1;
+        }
+
+        //ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
+
+        if (options['crime-focus']) {
+            priorityFactions = preferredCrimeFactionOrder.slice();
+        } else {
+            // keep order from facman
+            priorityFactions = Object.entries(nextAugsByFaction).map((x) => x[0]);
+            if (priorityFactions.length == 0) {
+                priorityFactions = preferredEarlyFactionOrder;
+            }
+        }
+
+        //ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
+
+        // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
+        // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
+        // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
+        const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
+        // Unless otherwise configured, we will skip factions with no remaining augmentations
+        completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] == gainLimit);
+        skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
+        if (completedFactions.length > 0)
+            ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
+
+        // TODO: If --prioritize-invites is set, we should have a preferred faction order that puts easiest-invites-to-earn at the front (e.g. all city factions)
     }
-    //ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
-
-    // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
-    // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
-    // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
-    const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
-    // Unless otherwise configured, we will skip factions with no remaining augmentations
-    completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] == -1);
-    skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
-    if (completedFactions.length > 0)
-        ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
-
-    // TODO: If --prioritize-invites is set, we should have a preferred faction order that puts easiest-invites-to-earn at the front (e.g. all city factions)
     numJoinedFactions = playerInfo.factions.length;
     fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
 }
@@ -789,6 +824,12 @@ async function getCurrentFactionFavour(ns, factionName) {
 }
 
 /** @param {NS} ns
+ *  @returns {Promise<Number>} Current favour with the specified faction */
+async function getCurrentCompanyFavor(ns, factionName) {
+    return await getNsDataThroughFile(ns, `ns.singularity.getCompanyFavor(ns.args[0])`, null, [factionName]);
+}
+
+/** @param {NS} ns
  *  @returns {Promise<Number>} The hacking level required for the specified server */
 async function getServerRequiredHackLevel(ns, serverName) {
     return await getNsDataThroughFile(ns, `ns.getServerRequiredHackingLevel(ns.args[0])`, null, [serverName]);
@@ -818,7 +859,7 @@ export async function workForSingleFaction(ns, factionName, forceUnlockDonations
     let favorRepRequired = Math.max(0, repToFavour(repToDonate) - repToFavour(startingFavor));
     // When to stop grinding faction rep (usually ~467,000 to get 150 favour) Set this lower if there are no augs requiring that much REP
     let factionRepRequired = forceRep ? forceRep : forceUnlockDonations ? favorRepRequired : Math.min(highestRepAug, favorRepRequired);
-    if (highestRepAug == -1 && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
+    if (highestRepAug == gainLimit && !firstFactions.includes(factionName) && !forceRep && !options['get-invited-to-every-faction'])
         return ns.print(`All "${factionName}" augmentations are owned. Skipping unlocking faction...`);
     // Ensure we get an invite to location-based factions we might want / need
     if (!await earnFactionInvite(ns, factionName))
@@ -972,6 +1013,7 @@ async function measureRepGainRate(ns, factionName, worktype = "hacking") {
     }
     if (!hasFormulas) {
         const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()');
+        let t;
         switch (worktype) {
             case "hacking":
                 return ((p.skills.hacking + p.skills.intelligence / 3) / CONSTANTS_MaxSkillLevel) *
@@ -980,7 +1022,7 @@ async function measureRepGainRate(ns, factionName, worktype = "hacking") {
                     mult(favor) *
                     sharePower * 5;
             case "security":
-                const t =
+                t =
                     (0.9 *
                     (p.skills.strength +
                         p.skills.defense +
@@ -992,7 +1034,7 @@ async function measureRepGainRate(ns, factionName, worktype = "hacking") {
                 return t * p.mults.faction_rep * mult(favor) 
                     * calculateIntelligenceBonus(p.skills.intelligence, 1) * 5;
             case "field":
-                const t1 =
+                t =
                     (0.9 *
                     (p.skills.strength +
                         p.skills.defense +
@@ -1002,7 +1044,7 @@ async function measureRepGainRate(ns, factionName, worktype = "hacking") {
                         (p.skills.hacking + p.skills.intelligence) * sharePower)) /
                     CONSTANTS_MaxSkillLevel /
                     5.5;
-                return t1 * p.mults.faction_rep * mult(favor) 
+                return t * p.mults.faction_rep * mult(favor) 
                     * calculateIntelligenceBonus(p.skills.intelligence, 1) * 5;
             default:
                 return 0;
@@ -1021,11 +1063,10 @@ async function measureFactionRepGainRate(ns, factionName, worktype = null) {
  * @param {JobName} workType 
  **/
 async function measureCompanyRepGainRate(ns, companyName, workType) {
-    const p = await getPlayerInfo(ns);
-    const favor = await getCurrentFactionFavour(ns, factionName);
-
     if (hasFormulas) {
         try {
+            const p = await getPlayerInfo(ns);
+            const favor = await getCurrentCompanyFavor(ns, companyName);
             const gains = ns.formulas.work.companyGains(p, companyName, workType, favor);
             // as we show gain rate / sec, we have to multiply by 5 (200ms cycle)
             return gains.reputation * 5 || 1;
