@@ -3,6 +3,11 @@ import {
     formatDuration, formatMoney, formatNumberShort, disableLogs, log
 } from './helpers.js'
 
+
+/**
+ * @typedef {import('../NetScriptDefinitions.js').NS} NS
+ */
+
 let options;
 const argsSchema = [
     ['first', []], // Grind rep with these factions first. Also forces a join of this faction if we normally wouldn't (e.g. no desired augs or all augs owned)
@@ -763,7 +768,7 @@ async function checkFactionInvites(ns) {
 /**
  *  @returns {Promise<number>} List of new faction invites
  **/
-async function getCompanyFavorGain(ns, companyName) {
+async function getCompanyFavorGainData(ns, companyName) {
     return await getNsDataThroughFile(ns, "ns.singularity.getCompanyFavorGain(ns.args[0])", null, [companyName]);
 }
 
@@ -943,11 +948,9 @@ async function startWorkForFaction(ns, factionName, work, focus) {
 
 const CONSTANTS_MaxSkillLevel = 975;
 
-function calculateIntelligenceBonus(intelligence, weight = 1) {
-    return 1 + (weight * Math.pow(intelligence, 0.8)) / 600;
-}
+const calculateIntelligenceBonus = (intelligence, weight = 1) => 1 + (weight * Math.pow(intelligence, 0.8)) / 600;
 
-function mult(favor) {
+const mult = (favor) => {
     let favorMult = 1 + favor / 100;
     if (isNaN(favorMult)) {
       favorMult = 1;
@@ -955,15 +958,10 @@ function mult(favor) {
     return favorMult * bitnodeMultipliers.FactionWorkRepGain;
 }
 
-function CalculateShareMult(power) {
-    const x = 1 + Math.log(power) / 25;
-    if (isNaN(x) || !isFinite(x)) return 1;
-    return x;
-  }
+let hasFormulas = true;
 
 /** Measure our rep gain rate (per second)
  * @param {NS} ns
- *
  **/
 async function measureRepGainRate(ns, factionName, worktype = "hacking") {
     // The game no longer provides the rep gain rate for a given work type, so we must measure it - code copied
@@ -971,38 +969,52 @@ async function measureRepGainRate(ns, factionName, worktype = "hacking") {
     const p = await getPlayerInfo(ns);
     const favor = await getCurrentFactionFavour(ns, factionName);
 
-    switch (worktype) {
-        case "hacking":
-            return ((p.skills.hacking + p.skills.intelligence / 3) / CONSTANTS_MaxSkillLevel) *
-                p.mults.faction_rep *
-                calculateIntelligenceBonus(p.skills.intelligence, 1) *
-                mult(favor) *
-                CalculateShareMult();
-        case "security":
-            const t =
-                (0.9 *
-                (p.skills.strength +
-                    p.skills.defense +
-                    p.skills.dexterity +
-                    p.skills.agility +
-                    (p.skills.hacking + p.skills.intelligence) * CalculateShareMult())) /
-                CONSTANTS_MaxSkillLevel /
-                4.5;
-            return t * p.mults.faction_rep * mult(favor) * calculateIntelligenceBonus(p.skills.intelligence, 1);
-        case "field":
-            const t1 =
-                (0.9 *
-                (p.skills.strength +
-                    p.skills.defense +
-                    p.skills.dexterity +
-                    p.skills.agility +
-                    p.skills.charisma +
-                    (p.skills.hacking + p.skills.intelligence) * CalculateShareMult())) /
-                CONSTANTS_MaxSkillLevel /
-                5.5;
-            return t1 * p.mults.faction_rep * mult(favor) * calculateIntelligenceBonus(p.skills.intelligence, 1);
-        default:
-            return 0;
+    if (hasFormulas) {
+        try {
+            const gains = ns.formulas.work.factionGains(p, worktype, favor);
+            // as we show gain rate / sec, we have to multiply by 5 (200ms cycle)
+            return gains.reputation * 5 || 1;
+        } catch  {
+            hasFormulas = false;
+        }
+    }
+    if (!hasFormulas) {
+        const sharePower = await getNsDataThroughFile(ns, 'ns.getSharePower()');
+        switch (worktype) {
+            case "hacking":
+                return ((p.skills.hacking + p.skills.intelligence / 3) / CONSTANTS_MaxSkillLevel) *
+                    p.mults.faction_rep *
+                    calculateIntelligenceBonus(p.skills.intelligence, 1) *
+                    mult(favor) *
+                    sharePower * 5;
+            case "security":
+                const t =
+                    (0.9 *
+                    (p.skills.strength +
+                        p.skills.defense +
+                        p.skills.dexterity +
+                        p.skills.agility +
+                        (p.skills.hacking + p.skills.intelligence) * sharePower)) /
+                    CONSTANTS_MaxSkillLevel /
+                    4.5;
+                return t * p.mults.faction_rep * mult(favor) 
+                    * calculateIntelligenceBonus(p.skills.intelligence, 1) * 5;
+            case "field":
+                const t1 =
+                    (0.9 *
+                    (p.skills.strength +
+                        p.skills.defense +
+                        p.skills.dexterity +
+                        p.skills.agility +
+                        p.skills.charisma +
+                        (p.skills.hacking + p.skills.intelligence) * sharePower)) /
+                    CONSTANTS_MaxSkillLevel /
+                    5.5;
+                return t1 * p.mults.faction_rep * mult(favor) 
+                    * calculateIntelligenceBonus(p.skills.intelligence, 1) * 5;
+            default:
+                return 0;
+        }
     }
 }
 
@@ -1012,16 +1024,33 @@ async function measureFactionRepGainRate(ns, factionName, worktype = null) {
     return await measureRepGainRate(ns, factionName, worktype);
 }
 /** Measure our company rep gain rate (per second)
- * @param {NS} ns */
-async function measureCompanyRepGainRate(ns, companyName) {
-    const gain = await getCompanyFavorGain(ns, companyName);
+ * @param {NS} ns
+ * @param {string} companyName The company to be used
+ * @param {JobName} workType 
+ **/
+async function measureCompanyRepGainRate(ns, companyName, workType) {
+    const p = await getPlayerInfo(ns);
+    const favor = await getCurrentFactionFavour(ns, factionName);
+
+    if (hasFormulas) {
+        try {
+            const gains = ns.formulas.work.companyGains(p, companyName, workType, favor);
+            // as we show gain rate / sec, we have to multiply by 5 (200ms cycle)
+            return gains.reputation * 5 || 1;
+        } catch  {
+            hasFormulas = false;
+        }
+    }
+
+    // no formulas
+    const gain = await getCompanyFavorGainData(ns, companyName) * 5; // adjust to secs from cycles
     return gain;
 }
 
 /** Try all work types and see what gives the best rep gain with this faction!
  * @param {NS} ns 
  * @param {string} factionName The name of the faction to work for
- * @returns {Promise<FactionWorkType>} The faction work type measured to give the best reputation gain rate */
+ * @returns {Promise<string>} The faction work type measured to give the best reputation gain rate */
 async function detectBestFactionWork(ns, factionName) {
     let bestWork, bestRepRate = 0;
     for (const work of Object.values(ns.enums.FactionWorkType)) {
@@ -1222,7 +1251,7 @@ export async function workForMegacorpFactionInvite(ns, factionName, waitForInvit
                 if (backdoored) repRequiredForFaction -= 100_000;
             }
             // Measure rep gain rate to give an ETA
-            const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName);
+            const repGainRate = !isWorking ? 0 : await measureCompanyRepGainRate(ns, companyName, currentJob);
             const eta = !isWorking ? "?" : formatDuration(1000 * ((requiredRep || repRequiredForFaction) - currentReputation) / repGainRate);
             player = await getPlayerInfo(ns);
             const json_status = {
