@@ -1,5 +1,5 @@
 import { log, getConfiguration, instanceCount, getNsDataThroughFile } from './helpers.js'
-import { PrintTable, ColorPrint, DefaultStyle, ALIGN_RIGHT} from 'table-helper.js';
+import { PrintTable, ColorPrint, DefaultStyle, ALIGN_RIGHT, TABLE_SEPARATOR} from 'table-helper.js';
 // print information about used memory for all servers
 
 const purchasedServerName = "daemon"; // The name to give all purchased servers. Also used to determine which servers were purchased
@@ -98,7 +98,10 @@ export async function main(ns) {
     do {
         const memServers = await getServerList(ns);
         const emptyServers = memServers.filter(server => server.ramUsed == 0);
-        const data = memServers.filter(srv => srv.ramUsed > 0).map(server => [
+        const data = memServers
+            .filter(srv => srv.ramUsed > 0)
+            .map(server => 
+        [
             server.name,
             ns.formatRam(server.maxRam), 
             ns.formatRam(server.ramUsed),
@@ -110,7 +113,7 @@ export async function main(ns) {
         if (emptyLen > 0) { 
             const emptyMaxMem = emptyServers.reduce((emptyMax, server) => emptyMax+server.maxRam, 0);
             data.push([`${emptyLen} other servers`, 
-                ns.formatRam(emptyMaxMem), "--", "--"]);
+                ns.formatRam(emptyMaxMem), ns.formatRam(0), ns.formatPercent(0), "--"]);
         }
         const columns = [
             { header: 'Host', width: 20 },
@@ -120,7 +123,7 @@ export async function main(ns) {
             { header: 'type', width: 10, pad: 1, align: ALIGN_RIGHT }
         ];
         const [totalMax, totalUsed] = memServers.reduce(([totalMax, totalUsed], s) => [totalMax + s.maxRam, totalUsed + s.ramUsed], [0, 0]);
-        data.push("---"); // seperator
+        data.push(TABLE_SEPARATOR); // seperator
         data.push([
             "Total",
             ns.formatRam(totalMax), 
