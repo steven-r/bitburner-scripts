@@ -163,6 +163,7 @@ export async function main(ns) {
     let loadingComplete = false; // In the event of suboptimal RAM conditions, keep trying to start until we succeed
     while (!loadingComplete) {
         try {
+            await loadStartupData(ns);
             loadingComplete = true;
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' +
@@ -223,7 +224,6 @@ async function loadStartupData(ns) {
     }
 
     const facmanAugs = JSON.parse(facmanAugsStr);
-
     if (facmanAugDataChanged(facmanAugs)) {
         breakRequired = true;
         scope = 0;
