@@ -498,6 +498,7 @@ async function manageUnownedAugmentations(ns, ignoredAugs) {
     let workingAugs = availableAugs.map((v) => {
         let res = {
           canUse: v.prereqs.length == 0,
+          prereqs: v.prereqs,
           faction: v.getFromJoined(),
           name: v.name,
           reputation: v.reputation,
