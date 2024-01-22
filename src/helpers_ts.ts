@@ -1,4 +1,4 @@
-import { FilenameOrPID, NS, RunOptions, ToastVariant } from "@ns";
+import { BitNodeMultipliers, FilenameOrPID, NS, RunOptions, ToastVariant } from "@ns";
 /**
  * Return a formatted representation of the monetary amount using scale symbols (e.g. $6.50M)
  * @param {number} num - The number to format
@@ -82,7 +82,7 @@ export function formatDuration(duration: number) {
 }
 
 /** Generate a hashCode for a string that is pretty unique most of the time */
-export function hashCode(s: string) { return s.split("").reduce(function (a, b) { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0); }
+export const hashCode = (s: string) => s.split("").reduce(function (a, b) { a = ((a << 5) - a) + b.charCodeAt(0); return a & a }, 0);
 
 /** @param {NS} ns **/
 export function disableLogs(ns: NS, listOfLogs: string[]) { ['disableLog'].concat(...listOfLogs).forEach(log => checkNsInstance(ns, '"disableLogs"').disableLog(log)); }
@@ -107,10 +107,10 @@ export function getFnRunViaNsRun(ns: NS) { return checkNsInstance(ns, '"getFnRun
 
 /** @param {NS} ns
  *  Use where a function is required to run a script and you have already referenced ns.exec in your script **/
-export function getFnRunViaNsExec(ns: NS, host = "home") {
+export function getFnRunViaNsExec(ns: NS, host: string = "home") {
     checkNsInstance(ns, '"getFnRunViaNsExec"');
-    return function (scriptPath: string, ...args: any) { return ns.exec(scriptPath, host, ...args); }
-}
+    return (scriptPath: string, threads: number, ...args: any[]) => 
+        ns.exec(scriptPath, host, { temporary: true, threads }, ...args); }
 // VARIATIONS ON NS.ISRUNNING
 
 /** @param {NS} ns
@@ -137,7 +137,7 @@ export function getFnIsAliveViaNsPs(ns: NS) {
 export async function getNsDataThroughFile(ns: NS, command: string, fName: string, args: any[] | undefined = [], verbose: boolean | undefined = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile"');
     if (!verbose) disableLogs(ns, ['run', 'isRunning']);
-    const run = ns.run.bind(ns)
+    const run = (script: string, ...args: any[]) => ns.run(script, {threads: 1, temporary: true}, ...args)
     return await getNsDataThroughFile_Custom(ns, run, command, fName, args, verbose, maxRetries, retryDelayMs);
 }
 
@@ -163,10 +163,9 @@ function getDefaultCommandFileName(command: string, ext = '.txt') {
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  **/
 export async function getNsDataThroughFile_Custom(ns: NS, 
-    fnRun: (script: string, threadOrOptions?: number | RunOptions | undefined, 
-        ...args: (string | number | boolean)[]) => number, 
+    fnRun: (script: string, ...args: any[]) => number, 
         command: string, 
-        fName: string, 
+        fName?: string, 
         args: any[] = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"getNsDataThroughFile_Custom"');
     if (!verbose) disableLogs(ns, ['read']);
@@ -196,14 +195,17 @@ export async function getNsDataThroughFile_Custom(ns: NS,
         `const f="${fName}"; if(ns.read(f)!==r) ns.write(f,r,'w')`;
     // Run the command with auto-retries if it fails
     const pid = await runCommand_Custom(ns, fnRun, commandToFile, fNameCommand, args, verbose, maxRetries, retryDelayMs);
+    if (pid === null) {
+        return null;
+    }
     // Wait for the process to complete. Note, as long as the above returned a pid, we don't actually have to check it, just the file contents
-    const fnIsAlive = () => ns.read(fName) === initialContents;
+    const fnIsAlive = () => ns.read(fName as string) === initialContents;
     await waitForProcessToComplete_Custom(ns, fnIsAlive, pid, verbose);
     if (verbose) log(ns, `Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying. 
     let lastRead: any;
     const fileData = await autoRetry(ns, 
-        () => ns.read(fName),
+        () => ns.read(fName as string),
         (f: string) => (lastRead = f) !== undefined && f !== "" && f !== initialContents && !(typeof f == "string" && f.startsWith("ERROR: ")),
         () => `\nns.read('${fName}') returned a bad result: "${lastRead}".` +
             `\n  Script:  ${fNameCommand}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
@@ -223,7 +225,7 @@ export async function getNsDataThroughFile_Custom(ns: NS,
  * @param {args=} args - args to be passed in as arguments to command being run as a new script.
  * @param {bool=} verbose - (default false) If set to true, the evaluation result of the command is printed to the terminal
  */
-export async function runCommand(ns: NS, command: string, fileName: string, args: any[] = [], verbose = false, maxRetries = 5, retryDelayMs = 50) {
+export async function runCommand(ns: NS, command: string, fileName: string, args: any[] = [], verbose: boolean | undefined = false, maxRetries = 5, retryDelayMs = 50) {
     checkNsInstance(ns, '"runCommand"');
     if (!verbose) disableLogs(ns, ['run']);
     const run = ns.run.bind(ns)
@@ -343,7 +345,7 @@ export async function autoRetry(ns: NS,
     fnFunctionThatMayFail: any,
     fnSuccessCondition: any,
     errorContext: any = "Success condition not met",
-    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true) {
+    maxRetries = 5, initialRetryDelayMs = 50, backoffRate = 3, verbose = false, tprintFatalErrors = true): Promise<any|null> {
     checkNsInstance(ns, '"autoRetry"');
     let retryDelayMs = initialRetryDelayMs, attempts = 0;
     while (attempts++ <= maxRetries) {
@@ -435,7 +437,7 @@ export async function tryGetBitNodeMultipliers(ns: NS) {
 
 /** @param {NS} ns
  * tryGetBitNodeMultipliers Helper that allows the user to pass in their chosen implementation of getNsDataThroughFile to minimize RAM usage **/
-export async function tryGetBitNodeMultipliers_Custom(ns: NS, fnGetNsDataThroughFile: any) {
+export async function tryGetBitNodeMultipliers_Custom(ns: NS, fnGetNsDataThroughFile: any): Promise<BitNodeMultipliers | null> {
     checkNsInstance(ns, '"tryGetBitNodeMultipliers"');
     let canGetBitNodeMultipliers = false;
     try { canGetBitNodeMultipliers = 5 in (await getActiveSourceFiles_Custom(ns, fnGetNsDataThroughFile)); } catch { /* empty */ }
