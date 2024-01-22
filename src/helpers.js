@@ -54,11 +54,7 @@ export function formatNumber(num, minSignificantFigures = 3, minDecimalPlaces = 
 /** Return a datatime in ISO format */
 export function formatDateTime(datetime) { return datetime.toISOString(); }
 
-/** 
- * Format a duration (in milliseconds) as e.g. '1h 21m 6s' for big durations or e.g '12.5s' / '23ms' for small durations 
- * @param {number} duration - The timestamp to format as a duration
- * @returns {string}
- **/
+/** Format a duration (in milliseconds) as e.g. '1h 21m 6s' for big durations or e.g '12.5s' / '23ms' for small durations */
 export function formatDuration(duration) {
     if (duration < 1000) return `${duration.toFixed(0)}ms`
     if (!isFinite(duration)) return 'forever (Infinity)'
@@ -109,12 +105,8 @@ export function getFilePath(file) {
  *  Use where a function is required to run a script and you have already referenced ns.run in your script **/
 export function getFnRunViaNsRun(ns) { return checkNsInstance(ns, '"getFnRunViaNsRun"').run; }
 
-/** 
- *  Use where a function is required to run a script and you have already referenced ns.exec in your script 
- * @param {NS} ns
- * @param {number} [treads=1] 
- * @param {string=} [host="home"] 
- **/
+/** @param {NS} ns 
+ *  Use where a function is required to run a script and you have already referenced ns.exec in your script **/
 export function getFnRunViaNsExec(ns, host = "home") {
     checkNsInstance(ns, '"getFnRunViaNsExec"');
     return (scriptPath, threads, ...args) => 
@@ -179,6 +171,17 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     // Pre-write contents to the file that will allow us to detect if our temp script never got run
     const initialContents = "<Insufficient RAM>";
     ns.write(fName, initialContents, 'w');
+// TODO: Workaround for v2.3.0 deprecation. Remove when the warning is gone.
+    // Avoid serializing ns.getPlayer() properties that generate warnings
+    if (command === "ns.getPlayer()")
+        command = `( ()=> { let player = ns.getPlayer();
+            const excludeProperties = ['playtimeSinceLastAug', 'playtimeSinceLastBitnode', 'bitNodeN'];
+            return Object.keys(player).reduce((pCopy, key) => {
+                if (!excludeProperties.includes(key))
+                   pCopy[key] = player[key];
+                return pCopy;
+            }, {});
+        })()`;
 
     // Prepare a command that will write out a new file containing the results of the command
     // unless it already exists with the same contents (saves time/ram to check first)
@@ -195,17 +198,14 @@ export async function getNsDataThroughFile_Custom(ns, fnRun, command, fName = nu
     if (verbose) log(ns, `Process ${pid} is done. Reading the contents of ${fName}...`);
     // Read the file, with auto-retries if it fails // TODO: Unsure reading a file can fail or needs retrying. 
     let lastRead;
-    const errorcontext = `\nns.read('${fName}') returned a bad result: "${lastRead}".` +
+    const fileData = await autoRetry(ns, () => ns.read(fName),
+        f => (lastRead = f) !== undefined && f !== "" && f !== initialContents && !(typeof f == "string" && f.startsWith("ERROR: ")),
+        () => `\nns.read('${fName}') returned a bad result: "${lastRead}".` +
         `\n  Script:  ${fNameCommand}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
         (lastRead == undefined ? '\nThe developer has no idea how this could have happened. Please post a screenshot of this error on discord.' :
             lastRead == initialContents ? `\nThe script that ran this will likely recover and try again later once you have more free ram.` :
                 lastRead == "" ? `\nThe file appears to have been deleted before a result could be retrieved. Perhaps there is a conflicting script.` :
-                    `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`);
-    
-    const fileData = await autoRetry(ns, 
-        () => ns.read(fName),
-        f => (lastRead = f) !== undefined && f !== "" && f !== initialContents && !(typeof f == "string" && f.startsWith("ERROR: ")),
-        () => errorcontext,
+                    `\nThe script was likely passed invalid arguments. Please post a screenshot of this error on discord.`),
         maxRetries, retryDelayMs, undefined, verbose, verbose);
     if (verbose) log(ns, `Read the following data for command ${command}:\n${fileData}`);
     return JSON.parse(fileData); // Deserialize it back into an object/array and return
