@@ -6,6 +6,7 @@ import {
 
 /**
  * @typedef {import('../NetScriptDefinitions.js').NS} NS
+ * @typedef {import('../NetScriptDefinitions.js').Player} Player
  */
 
 let options;
@@ -162,11 +163,10 @@ export async function main(ns) {
     let loadingComplete = false; // In the event of suboptimal RAM conditions, keep trying to start until we succeed
     while (!loadingComplete) {
         try {
-            await loadStartupData(ns);
             loadingComplete = true;
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error while starting up. Trying again in 5 seconds...\n' +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+                (typeof err === 'string' ? err : (err.toString() + "/" + err.lineNumber)), false, 'warning');
             await ns.sleep(5000);
         }
     }
@@ -180,7 +180,7 @@ export async function main(ns) {
             await mainLoop(ns);
         } catch (err) {
             log(ns, 'WARNING: work-for-factions.js caught an unhandled error in its main loop. Trying again in 5 seconds...\n' +
-                (typeof err === 'string' ? err : err.message || JSON.stringify(err)), false, 'warning');
+                (typeof err === 'string' ? err : err.toString()), false, 'warning');
             await ns.sleep(5000);
             scope--; // Cancel out work scope increasing on the next iteration.
         }
@@ -188,10 +188,12 @@ export async function main(ns) {
     }
 }
 
-let lastFacmanAugData = [];
+let lastFacmanAugData = null;
+
 /** @param {any[]} newData  */
 const facmanAugDataChanged = (newData) => 
-    lastFacmanAugData.length != newData.length ||
+    !lastFacmanAugData ||
+        lastFacmanAugData.length != newData.length ||
         newData.some((aug, i) => aug.name != newData[i].name 
                         || aug.faction != newData[i].faction
                         || aug.desired != newData[i].desired);
@@ -205,8 +207,8 @@ async function loadStartupData(ns) {
 
     // Get some faction and augmentation information to decide what remains to be purchased
     dictFactionFavors = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getFactionFavor(o)'), '/Temp/getFactionFavors.txt', allKnownFactions);
+    const dictFactionAugs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationsFromFaction(o)'), '/Temp/getAugmentationsFromFactions.txt', allKnownFactions);
     const installedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations()`, '/Temp/player-augs-installed.txt');
-    // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
     hasFocusPenalty = !installedAugmentations.includes("Neuroreceptor Management Implant"); // Check if we have an augmentation that lets us not have to focus at work (always nicer if we can background it)
     shouldFocus = !options['no-focus'] && hasFocusPenalty; // Focus at work for the best rate of rep gain, unless focus activities are disabled via command line
     hasSimulacrum = installedAugmentations.includes("The Blade's Simulacrum");
@@ -221,8 +223,10 @@ async function loadStartupData(ns) {
     }
 
     const facmanAugs = JSON.parse(facmanAugsStr);
+
     if (facmanAugDataChanged(facmanAugs)) {
         breakRequired = true;
+        scope = 0;
         lastFacmanAugData = facmanAugs;
         ns.print("INFO: faction-manager.js reported a new order of augmentations to process");
         let nextAugs = facmanAugs.filter(x => x.desired);
@@ -231,57 +235,75 @@ async function loadStartupData(ns) {
         }
         //ns.print("nextAugs: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
 
-        if (nextAugs.length == 0) {
-            // include non-desired augs as well
-            nextAugs = facmanAugs;
-            if (playerGang) { // and remove gang augs again
-                nextAugs = nextAugs.filter(x => x.faction !== playerGang);
+        if (nextAugs.length > 0) {
+            if (gainStrategy == 'fast') {
+                nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
+                    nextAugs
+                    .filter(f => f.faction == a.faction)
+                    .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER)]));
+                gainLimit = Number.MAX_SAFE_INTEGER;
+            } else {
+                // mpst
+                nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
+                    nextAugs
+                    .filter(f => f.faction == a.faction)
+                    .reduce((max, aug) => Math.max(max, aug.reputation), -1)]));
+                gainLimit = -1;
+            }
+
+            //ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
+
+            if (options['crime-focus']) {
+                priorityFactions = preferredCrimeFactionOrder.slice();
+            } else {
+                // keep order from facman
+                priorityFactions = Object.entries(nextAugsByFaction).map((x) => x[0]);
+                if (priorityFactions.length == 0) {
+                    priorityFactions = preferredEarlyFactionOrder;
+                }
+            }
+        } else {
+            const augmentationNames = [...new Set(Object.values(dictFactionAugs).flat())];
+            const dictAugRepReqs = await getNsDataThroughFile(ns, dictCommand('ns.singularity.getAugmentationRepReq(o)'), '/Temp/getAugmentationRepReqs.txt', augmentationNames);
+            const ownedAugmentations = await getNsDataThroughFile(ns, `ns.singularity.getOwnedAugmentations(true)`, '/Temp/player-augs-purchased.txt');
+            
+            // Based on what augmentations we own, we can change our own behaviour (e.g. whether to allow work to steal focus)
+            nextAugsByFaction = Object.fromEntries(allKnownFactions.map(f => [f,
+                dictFactionAugs[f].filter(aug => !ownedAugmentations.includes(aug))
+                    .reduce((max, aug) => Math.max(max, dictAugRepReqs[aug]), -1)])
+                    .sort((a, b) => a[1] - b[1]));
+            gainLimit = -1;
+            ns.print("nextAugs: " + JSON.stringify(nextAugsByFaction));
+
+            if (options['crime-focus']) {
+                priorityFactions = preferredCrimeFactionOrder.slice();
+                ns.print("INFO: selecting preferred crime order as priority")
+            } else {
+                priorityFactions = Object.entries(nextAugsByFaction)
+                    .filter(x => x[1] != -1 && (playerGang && x[0] !== playerGang))
+                    .map((x) => x[0]);
+                ns.print("priority-factions: " + JSON.stringify(priorityFactions))
+                if (priorityFactions.length == 0) {
+                    priorityFactions = preferredEarlyFactionOrder.slice();
+                    ns.print("INFO: selecting preferred crime order as priority")
+                }
             }
             //ns.print("nextAugs2: " + nextAugs.map(x => x.name + "/" + x.faction).join(", "));
         }
-
-        if (gainStrategy == 'fast') {
-            nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
-                nextAugs
-                .filter(f => f.faction == a.faction)
-                .reduce((min, aug) => Math.min(min, aug.reputation), Number.MAX_SAFE_INTEGER)]));
-            gainLimit = Number.MAX_SAFE_INTEGER;
-        } else {
-            // mpst
-            nextAugsByFaction = Object.fromEntries(nextAugs.map(a => [a.faction, 
-                nextAugs
-                .filter(f => f.faction == a.faction)
-                .reduce((max, aug) => Math.max(max, aug.reputation), -1)]));
-            gainLimit = -1;
-        }
-
-        //ns.print("DEBUG: nextAugsByFaction: " + JSON.stringify(nextAugsByFaction));
-
-        if (options['crime-focus']) {
-            priorityFactions = preferredCrimeFactionOrder.slice();
-        } else {
-            // keep order from facman
-            priorityFactions = Object.entries(nextAugsByFaction).map((x) => x[0]);
-            if (priorityFactions.length == 0) {
-                priorityFactions = preferredEarlyFactionOrder;
-            }
-        }
-
-        //ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
-
-        // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
-        // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
-        // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
-        const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
-        // Unless otherwise configured, we will skip factions with no remaining augmentations
-        completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] == gainLimit);
-        skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
-        if (completedFactions.length > 0)
-            ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
-
-        // TODO: If --prioritize-invites is set, we should have a preferred faction order that puts easiest-invites-to-earn at the front (e.g. all city factions)
     }
-    numJoinedFactions = playerInfo.factions.length;
+    ns.print("DEBUG: priority Factions: " + JSON.stringify(priorityFactions));
+    // Unless otherwise configured, we will skip factions with no remaining augmentations
+    // Filter out factions who have no augs (or tentatively filter those with no desirable augs) unless otherwise configured. The exception is
+    // we will always filter the most-precluding city factions, (but not ["Chongqing", "New Tokyo", "Ishima"], which can all be joined simultaneously)
+    // TODO: Think this over more. need to filter e.g. chonquing if volhaven is incomplete...
+    const filterableFactions = (options['get-invited-to-every-faction'] ? ["Aevum", "Sector-12", "Volhaven"] : allKnownFactions);
+    
+    skipFactions = options.skip.concat(cannotWorkForFactions).concat(completedFactions).filter(fac => !firstFactions.includes(fac));
+    completedFactions = filterableFactions.filter(fac => nextAugsByFaction[fac] && nextAugsByFaction[fac] == gainLimit);
+    if (completedFactions.length > 0)
+        ns.print(`${completedFactions.length} factions will be skipped (for having all augs purchased): ${completedFactions.join(", ")}`);
+    
+        numJoinedFactions = playerInfo.factions.length;
     fulcrummHackReq = await getServerRequiredHackLevel(ns, "fulcrumassets");
 }
 
@@ -329,7 +351,13 @@ async function mainLoop(ns) {
             if (playerInBladeburner) {
                 ns.print(`INFO: Gang will give us most augs, so pausing work to allow Bladeburner to operate.`);
                 await stop(ns); // stop working so bladeburner can run
-                await ns.sleep(checkForNewPrioritiesInterval);
+                let n = 0;
+                // even if we wait for new priorities, some basic tasks can be performed
+                while (n < checkForNewPrioritiesInterval) {
+                    await tryBuyReputation(ns);
+                    await ns.sleep(5000);
+                    n += 5000;
+                }
                 return;
             }
         }
@@ -633,12 +661,16 @@ export async function crimeForKillsKarmaStats(ns, reqKills, reqKarma, reqStats, 
                 ns.tail(); // Force a tail window open to help the user kill this script if they accidentally closed the tail window and don't want to keep doing crime
             }
             let focusArg = shouldFocus === undefined ? true : shouldFocus; // Only undefined if running as imported function
-            crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', null, [crime, focusArg])
+            crimeTime = await getNsDataThroughFile(ns, 'ns.singularity.commitCrime(ns.args[0], ns.args[1])', null, [crime, focusArg]);
+            await ns.sleep(200); // wait at least a cycle to get all stuff updated
             if (shouldFocus) ns.tail(); // Force a tail window open when auto-criming with focus so that the user can more easily kill this script
         }
         // Periodic status update with progress
-        if (lastCrime != crime || (Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
+        if (lastCrime != crime) {
+            lastStatusUpdateTime = Date.now(); // do not display status
             lastCrime = crime;
+        }
+        if ((Date.now() - lastStatusUpdateTime) > statusUpdateInterval) {
             lastStatusUpdateTime = Date.now();
             ns.print(`Committing "${crime}" (${(100 * crimeChances[crime]).toPrecision(3)}% success) ` +
                 (forever ? 'forever...' : `until we reach ${strRequirements.map(r => r()).join(', ')}`));
@@ -1152,7 +1184,8 @@ async function trySpendHashes(ns, spendOn) {
  * @param {NS} ns */
 export async function tryBuyReputation(ns) {
     if (options['no-coding-contracts']) return;
-    if ((await getPlayerInfo(ns)).money < 1E12) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
+    const pi = await getPlayerInfo(ns);
+    if (pi.money > 1e6 && pi.money < 1E12) { // If we're wealthy, hashes have relatively little monetary value, spend hacknet-server hashes on contracts to gain rep faster
         let spentHashes = await trySpendHashes(ns, "Generate Coding Contract");
         if (spentHashes > 0) {
             log(ns, `Generated a new coding contract for ${formatNumberShort(Math.round(spentHashes / 100) * 100)} hashes`, false, 'success');
