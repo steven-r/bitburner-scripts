@@ -101,11 +101,11 @@ export function getFilePath(file: string) {
 // FUNCTIONS THAT PROVIDE ALTERNATIVE IMPLEMENTATIONS TO EXPENSIVE NS FUNCTIONS
 // VARIATIONS ON NS.RUN
 
-/** @param {NS} ns
+/** 
  *  Use where a function is required to run a script and you have already referenced ns.run in your script **/
-export function getFnRunViaNsRun(ns: NS) { return checkNsInstance(ns, '"getFnRunViaNsRun"').run; }
+export const getFnRunViaNsRun = (ns: NS) => checkNsInstance(ns, '"getFnRunViaNsRun"').run;
 
-/** @param {NS} ns
+/** 
  *  Use where a function is required to run a script and you have already referenced ns.exec in your script **/
 export function getFnRunViaNsExec(ns: NS, host: string = "home") {
     checkNsInstance(ns, '"getFnRunViaNsExec"');
@@ -113,11 +113,11 @@ export function getFnRunViaNsExec(ns: NS, host: string = "home") {
         ns.exec(scriptPath, host, { temporary: true, threads }, ...args); }
 // VARIATIONS ON NS.ISRUNNING
 
-/** @param {NS} ns
+/** 
  *  Use where a function is required to run a script and you have already referenced ns.run in your script  */
-export function getFnIsAliveViaNsIsRunning(ns: NS) { return checkNsInstance(ns, '"getFnIsAliveViaNsIsRunning"').isRunning; }
+export const getFnIsAliveViaNsIsRunning = (ns: NS) => checkNsInstance(ns, '"getFnIsAliveViaNsIsRunning"').isRunning;
 
-/** @param {NS} ns
+/** 
  *  Use where a function is required to run a script and you have already referenced ns.ps in your script  */
 export function getFnIsAliveViaNsPs(ns: NS) {
     checkNsInstance(ns, '"getFnIsAliveViaNsPs"');
@@ -283,7 +283,7 @@ export async function runCommand_Custom(ns: NS, fnRun: any, command: string, fil
                 `despite having written it. (Did a competing process delete or overwrite it?)`, maxRetries, retryDelayMs, undefined, verbose, verbose);
         }
         // Run the script, now that we're sure it is in place
-        return fnRun(fileName, 1 /* Always 1 thread */, ...args);
+        return fnRun(fileName, ...args);
     }, (pid: number) => pid !== 0,
         () => `The temp script was not run (likely due to insufficient RAM).` +
             `\n  Script:  ${fileName}\n  Args:    ${JSON.stringify(args)}\n  Command: ${command}` +
@@ -495,9 +495,9 @@ export async function getStocksValue(ns: NS) {
             - 100000 * (Math.sign(stk.pos[0]) + Math.sign(stk.pos[2])), 0);
 }
 
-/** @param {NS} ns 
+/** 
  * Returns a helpful error message if we forgot to pass the ns instance to a function */
-export function checkNsInstance(ns: NS, fnName = "this function") {
+export const checkNsInstance = (ns: NS, fnName = "this function"): NS => {
     if (ns === undefined || !ns.print) throw new Error(`The first argument to ${fnName} should be a 'ns' instance.`);
     return ns;
 }
